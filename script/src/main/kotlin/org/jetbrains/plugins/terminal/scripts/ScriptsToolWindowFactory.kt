@@ -336,17 +336,9 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
     }
   }
 
-  // Pixel-based ellipsis: SimpleColoredComponent clips long text instead of showing "…".
-  // Reserve covers the renderer paddings, the icon + gap (title line only) and the scrollbar.
-  private fun abbreviate(text: String, bold: Boolean, reserve: Int): String {
-    val font = if (bold) list.font.deriveFont(java.awt.Font.BOLD) else list.font
-    val fm = list.getFontMetrics(font)
-    val available = (list.width - JBUI.scale(reserve)) / 2
-    if (available <= 0 || fm.stringWidth(text) <= available) return text
-    var s = text
-    while (s.isNotEmpty() && fm.stringWidth("$s…") > available) s = s.dropLast(1)
-    return "$s…"
-  }
+  // Fixed character caps, independent of list width: title line 15 chars, meta line 25.
+  private fun abbreviate(text: String, maxChars: Int): String =
+    if (text.length <= maxChars) text else text.take(maxChars) + "…"
 
   // Native two-line row per the approved prototype: title line = green running-dot (when the
   // script has a terminal tab) + bold name, gray command preview below. WideSelectionListUI
@@ -361,6 +353,11 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
       isOpaque = false
       val lines = JPanel(GridLayout(2, 1))
       lines.isOpaque = false
+      // SimpleColoredComponent's constructor sets setOpaque(true) — left alone, each line paints
+      // its own white background over the selection band, leaving blue only at the row padding
+      // (the "ring with white middle"). Both lines must be transparent.
+      titleLine.isOpaque = false
+      metaLine.isOpaque = false
       lines.add(titleLine)
       lines.add(metaLine)
       titleLine.border = JBUI.Borders.emptyBottom(4)
@@ -374,11 +371,11 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
       titleLine.clear()
       metaLine.clear()
       titleLine.icon = if (isOpen(cfg)) dotIcon else iconFor(cfg)
-      titleLine.append(abbreviate(cfg.name, bold = true, reserve = 12 + 10 + 16 + 8 + 14), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
-      titleLine.toolTipText = cfg.name
-      metaLine.border = JBUI.Borders.emptyLeft(0)
-      metaLine.append(abbreviate(commandFor(cfg), bold = false, reserve = 12 + 10 + 14), SimpleTextAttributes.GRAYED_ATTRIBUTES)
-      metaLine.toolTipText = commandFor(cfg)
+      titleLine.append(abbreviate(cfg.name, 10), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
+      metaLine.append(abbreviate(commandFor(cfg), 25), SimpleTextAttributes.GRAYED_ATTRIBUTES)
+      // JList asks the renderer component itself (this panel) for the tooltip — the inner
+      // lines are never queried, so the full title rides on the panel.
+      toolTipText = cfg.name
       foreground = list.foreground
       // The selection band is painted by the renderer itself, edge to edge, so it looks right
       // no matter which list UI ends up active. Always the focused blue: clicking a row whose

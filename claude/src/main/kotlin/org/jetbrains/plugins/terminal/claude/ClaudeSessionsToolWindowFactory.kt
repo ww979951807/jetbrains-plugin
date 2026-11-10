@@ -465,17 +465,9 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
   private val sessionIcon = IconLoader.getIcon("/icons/rebased/claudeSessions.svg", ClaudeSessionsPanel::class.java)
   private val dotIcon = IconLoader.getIcon("/icons/rebased/sessionDot.svg", ClaudeSessionsPanel::class.java)
 
-  // Pixel-based ellipsis: SimpleColoredComponent clips long text instead of showing "…".
-  // Reserve covers the renderer paddings, the icon + gap (title line only) and the scrollbar.
-  private fun abbreviate(text: String, bold: Boolean, reserve: Int): String {
-    val font = if (bold) list.font.deriveFont(java.awt.Font.BOLD) else list.font
-    val fm = list.getFontMetrics(font)
-    val available = (list.width - JBUI.scale(reserve)) / 2
-    if (available <= 0 || fm.stringWidth(text) <= available) return text
-    var s = text
-    while (s.isNotEmpty() && fm.stringWidth("$s…") > available) s = s.dropLast(1)
-    return "$s…"
-  }
+  // Fixed character caps: title line 15 chars, meta line 25 — independent of list width.
+  private fun abbreviate(text: String, maxChars: Int): String =
+    if (text.length <= maxChars) text else text.take(maxChars) + "…"
 
   // Native two-line row per the approved prototype: title line = green open-dot (when the
   // session has a terminal tab) + bold title; meta line in gray. The selection band is painted
@@ -488,6 +480,11 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
       isOpaque = false
       val lines = JPanel(GridLayout(2, 1))
       lines.isOpaque = false
+      // SimpleColoredComponent's constructor sets setOpaque(true) — left alone, each line paints
+      // its own white background over the selection band, leaving blue only at the row padding
+      // (the "ring with white middle"). Both lines must be transparent.
+      titleLine.isOpaque = false
+      metaLine.isOpaque = false
       lines.add(titleLine)
       lines.add(metaLine)
       titleLine.border = JBUI.Borders.emptyBottom(4)
@@ -502,13 +499,13 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
       metaLine.clear()
       val open = isSessionOpen(info.id)
       titleLine.icon = if (open) dotIcon else sessionIcon
-      titleLine.append(abbreviate(info.title, bold = true, reserve = 12 + 10 + 16 + 8 + 14), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
-      titleLine.toolTipText = info.title
+      titleLine.append(abbreviate(info.title, 10), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
       val time = SimpleDateFormat("yyyy-MM-dd HH:mm").format(Date(info.lastModified))
       val meta = "$time · ${formatSize(info.sizeBytes)} · ${info.id.take(8)} · ${info.messageCount}"
-      metaLine.border = JBUI.Borders.emptyLeft(0)
-      metaLine.append(abbreviate(meta, bold = false, reserve = 12 + 10 + 14), SimpleTextAttributes.GRAYED_ATTRIBUTES)
-      metaLine.toolTipText = meta
+      metaLine.append(abbreviate(meta, 25), SimpleTextAttributes.GRAYED_ATTRIBUTES)
+      // JList asks the renderer component itself (this panel) for the tooltip — the inner
+      // lines are never queried, so the full title rides on the panel.
+      toolTipText = info.title
       foreground = list.foreground
       // The selection band is painted by the renderer itself, edge to edge, so it looks right
       // no matter which list UI ends up active. Always the focused blue: clicking a row whose
