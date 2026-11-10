@@ -16,7 +16,7 @@ repositories {
 
 dependencies {
     intellijPlatform {
-        intellijIdeaCommunity("2026.2")
+        intellijIdea("2026.2")
         bundledPlugin("org.jetbrains.plugins.terminal")
     }
 }
