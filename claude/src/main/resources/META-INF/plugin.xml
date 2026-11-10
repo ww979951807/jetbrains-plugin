@@ -1,0 +1,12 @@
+<idea-plugin>
+  <id>ww97951807.claude-sessions</id>
+  <name>Claude Sessions</name>
+  <vendor>ww979951807</vendor>
+  <description>Claude session list tool window: sessions of the current project, double click to resume, green dot for open tabs.</description>
+  <depends>com.intellij.modules.platform</depends>
+  <depends>org.jetbrains.plugins.terminal</depends>
+  <extensions defaultExtensionNs="com.intellij">
+    <toolWindow id="Claude Sessions" anchor="left" order="after Version Control" icon="/icons/rebased/claudeSessions.svg"
+                showStripeButton="true" factoryClass="org.jetbrains.plugins.terminal.claude.ClaudeSessionsToolWindowFactory"/>
+  </extensions>
+</idea-plugin>

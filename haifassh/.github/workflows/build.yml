@@ -1,0 +1,51 @@
+name: Build
+
+# Runs on every push to master and on every pull request, so breakage is caught early.
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch: # lets you trigger a run manually from the Actions tab
+
+# Cancel an in-progress run if a newer commit is pushed to the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Test & build plugin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle (with dependency/build caching)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run tests
+        run: xvfb-run --auto-servernum ./gradlew test --stacktrace
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: build/reports/tests/
+
+      - name: Build the plugin distribution
+        run: ./gradlew buildPlugin --stacktrace
+
+      - name: Upload the plugin zip as a build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: haifassh-plugin
+          path: build/distributions/*.zip
+          if-no-files-found: error
+          retention-days: 30

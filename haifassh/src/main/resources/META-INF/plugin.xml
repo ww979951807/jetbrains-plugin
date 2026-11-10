@@ -1,0 +1,189 @@
+<idea-plugin>
+    <id>com.haifasoft.haifassh</id>
+    <name>HaifaSSH - SSH Session Manager</name>
+    <!-- version is injected at build time from gradle.properties (pluginVersion) via patchPluginXml -->
+    <vendor email="a.ganayem@haifasoft.com" url="https://haifasoft.com">HaifaSoft</vendor>
+
+    <description><![CDATA[
+        <h2>HaifaSSH — SSH, SFTP &amp; FTP session manager, built into your IDE</h2>
+
+        <p>Stop juggling a separate terminal app and FTP client. HaifaSSH brings a fast, organized,
+        multi-tab SSH, SFTP, and FTP workflow right into your JetBrains IDE — connect to all your servers
+        from a session tree, open real interactive shells in tabs, browse and transfer remote files,
+        and keep every credential safe in the IDE's own encrypted vault. Free and open source.</p>
+
+        <h3>Why you'll like it</h3>
+        <ul>
+            <li>🗂️ <b>Organized session tree</b> — group all your servers into folders in the
+                <em>SSH Sessions</em> tool window. Drag and drop sessions to reorder or move them,
+                color-code and icon-tag items, rename in place with <b>Shift+F6</b>, and type-to-search to jump to any host instantly.</li>
+            <li>💻 <b>Real embedded terminals</b> — double-click an SSH session to open a genuine interactive
+                SSH shell as a tab. Open terminals in the tool window <em>or</em> as full editor tabs,
+                with configurable scrollback for long-running output like <code>tail -f</code>.</li>
+            <li>📁 <b>Embedded SFTP &amp; FTP file browsers</b> — browse remote directories, create folders,
+                rename, delete, and download files directly into your IDE. Double-click SFTP/FTP sessions to jump
+                straight into file browsing, or open a live file panel right beside your terminal.</li>
+            <li>🪟 <b>Side-by-side local explorer &amp; docking</b> — open your local file system side-by-side with
+                remote sessions in a resizable split view. Drag and drop files from your desktop or local explorer
+                directly into remote folders to upload. Choose your docking style: <em>Docked Pinned</em>,
+                <em>Unpinned</em>, or detach into a floating <em>Window Mode</em>.</li>
+            <li>⌨️ <b>Keyboard-driven SpeedSearch</b> — start typing anywhere in the session tree or file tables
+                to instantly jump to matching hosts or files, with full in-place Backspace editing and navigation
+                shortcuts (<code>Alt+Up</code>, <code>Alt+Left/Right</code>).</li>
+            <li>⚡ <b>Terminal assistant panel</b> — companion panel docked alongside your terminal with quick
+                access to host files, executed <b>Command History</b>, and reusable <b>Command Snippets</b>.</li>
+            <li>🎨 <b>Terminals that match your theme</b> — ready-made color schemes (Classic Dark,
+                Solarized, Monokai, One Dark, Light), a "Follow IDE Theme" mode, and a fully editable
+                custom scheme (background, foreground, cursor, selection, all 16 ANSI colors).</li>
+            <li>🔐 <b>Credentials done right</b> — passwords and key passphrases live in the IDE
+                Password Safe, never in plain-text config. Private-key authentication and chained
+                <b>ProxyJump / bastion (jump-host)</b> connections are built in.</li>
+            <li>🛡️ <b>Security first</b> — SSH host keys are verified (trust-on-first-use, and it reads
+                your existing <code>~/.ssh/known_hosts</code>). Credential exports are AES-256 encrypted.
+                Weak legacy SHA-1/DSA algorithms are strictly opt-in, per session.</li>
+            <li>🛠️ <b>Built for real work</b> — multi-select bulk edits (recolor, re-icon, or delete many
+                sessions at once), duplicate a session with one click to spin up a near-identical host,
+                and build out your tree with right-click <em>New Session Here</em> / <em>New Subfolder</em>.</li>
+            <li>🔁 <b>Import &amp; export</b> — move your sessions between machines, optionally including
+                encrypted credentials.</li>
+        </ul>
+
+        <p>Works in IntelliJ IDEA and other JetBrains IDEs (2024.2+). No account, no telemetry —
+        your sessions and secrets stay on your machine.</p>
+
+        <p><b>Built and backed by <a href="https://haifasoft.com/">HaifaSoft</a></b> — engineer-led software
+        development, multiplied by AI. Need custom engineering, architecture, or internal developer
+        tooling? Visit <a href="https://haifasoft.com/">haifasoft.com</a>.</p>
+
+        <p style="font-size:0.9em;color:#888;">HaifaSSH is an independent community plugin and is not
+        affiliated with or endorsed by JetBrains. All product names and trademarks are the property of
+        their respective owners.</p>
+    ]]></description>
+
+    <change-notes><![CDATA[
+        <ul>
+            <li>0.16.2 — <b>Marketplace Error &amp; Freeze Reporting</b>:
+                integrated native JetBrains Marketplace error and UI freeze reporting (<code>JetBrainsMarketplaceErrorReportSubmitter</code>);
+                hardened remote file download paths against directory traversal; improved speed search and navigation stability.</li>
+            <li>0.16.1 — <b>SpeedSearch Popup &amp; Backspace Fix</b>:
+                fixed Backspace key event propagation to IntelliJ's native TableSpeedSearch popup,
+                allowing in-place character deletion without leaving search text stuck on screen.</li>
+            <li>0.16.0 — <b>File Explorer Type-Ahead &amp; Navigation Enhancements</b>:
+                support Backspace character editing and Escape cancellation in file explorer type-ahead search
+                without triggering parent directory navigation; dedicated Alt+Up/Cmd+Up, Alt+Left, Alt+Right
+                folder navigation shortcuts; improved focus and directory change lifecycle for search buffers.</li>
+            <li>0.15.0 — <b>Side-by-Side Local Filesystem &amp; View Modes</b>:
+                embedded side-by-side local filesystem explorer with drag &amp; drop to remote sessions;
+                IntelliJ terminal-style view modes (Docked Pinned, Docked Unpinned, Window Mode, Float, Undock);
+                docking move options (Move Left, Right, Up, Down); file explorer type-to-jump speed search
+                on both local and remote tables; smooth docking and detachment lifecycle.</li>
+            <li>0.14.0 — <b>Local File Explorer &amp; Enhanced Toolbar</b>:
+                standalone local file system explorer window with multi-file selection and
+                direct drag-and-drop into active remote sessions; revamped remote file browser
+                layout with full-width address bar placed above action buttons; responsive hover
+                feedback and hand cursor on all toolbar icons.</li>
+            <li>0.13.0 — <b>SFTP &amp; FTP File Browser</b>: full remote file browser supporting
+                SFTP (over active SSH sessions without re-authenticating, or standalone) and FTP.
+                Available alongside the terminal in a split pane, in a dedicated <em>SFTP Browser</em>
+                tool window, or as a standalone tab. Supports drag-and-drop uploads, copy/paste,
+                remote file navigation, directory management, and downloading files into the IDE.</li>
+            <li>0.12.0 — <b>Drag &amp; drop</b>: drag sessions and folders between folders to
+                reorganize the tree, and drop them <em>between</em> two rows to arrange the
+                list in exactly the order you want. The manual order is saved with the
+                session tree (and travels with export/import); folders you never reorder
+                stay sorted by name.</li>
+            <li>0.12.0 — <b>Split-editor fix</b>: splitting the editor with a terminal tab open
+                no longer leaves one split blank and unresizable. A live terminal is a single
+                widget, so it can only be inside one split at a time; the other split now shows
+                a short notice with a <em>Show it here</em> link to move it over, and both sides
+                lay out and resize normally.</li>
+            <li>0.11.2 — <b>Compatibility fix</b>: colored session/folder icons no longer crash the
+                <em>SSH Sessions</em> tree on IntelliJ 2025.2 and newer (a platform API changed how the
+                icon-tinting helper is called). No behavior change on older IDEs.</li>
+            <li>0.10.0 — <b>Folder right-click actions</b>: right-click a folder for
+                <em>New Session Here</em> and <em>New Subfolder</em> — both create the new item
+                directly inside the folder you clicked, so you can build out a session tree
+                without dragging things around afterwards.</li>
+            <li>0.9.0 — <b>Duplicate session</b>: right-click a session → <em>Duplicate…</em> to
+                open a pre-filled New Session dialog with every field copied — host, port, auth,
+                private key, jump hosts, icon/color, and the saved password/passphrase — so you
+                can tweak one thing and save it as a new connection.</li>
+            <li>0.8.0 — <b>Multi-select bulk edits</b>: select multiple sessions (or multiple
+                folders) with Ctrl/Shift-click and change them together — set the same color,
+                set the same icon (sessions), or delete them all at once. A selection stays to
+                one kind (sessions or folders), so bulk actions are unambiguous.</li>
+            <li>0.7.0 — <b>Configurable scrollback</b>: set how many lines each terminal keeps
+                (Settings → Tools → HaifaSSH Terminal), so large outputs like
+                <code>tail -f -n 10000</code> stay fully scrollable. Host-key verification now
+                also reads your existing <b>~/.ssh/known_hosts</b> (prioritized), so hosts you
+                already trust in OpenSSH connect without an extra prompt; newly accepted keys
+                are still written to the plugin's own file (your system file is never modified).</li>
+            <li>0.6.0 — <b>Security hardening.</b> SSH host keys are now <b>verified</b>
+                (trust-on-first-use against a managed known_hosts; changed keys warn and
+                default to abort) — previously host-key checking was disabled. Weak legacy
+                <b>SHA-1/DSA algorithms are now opt-in per session</b> (checkbox) instead of
+                always on. Exports that include credentials are <b>encrypted</b> with a
+                passphrase (AES-256) and written owner-only, instead of plaintext. In-memory
+                connection secrets are passed as wipeable bytes. Note: connecting to a host
+                for the first time now asks you to confirm its key, and old servers may need
+                the new "Allow legacy SHA-1/DSA algorithms" checkbox.</li>
+            <li>0.5.0 — Customize the session tree: pick a per-session <b>icon</b> and a
+                <b>color</b> for sessions and folders (tints the icon and name). <b>Rename</b>
+                any session or folder in place with <b>Shift+F6</b>. <b>Type-to-search</b> the
+                tree to locate a session by name. Right-click for a context menu
+                (Rename, Set Color…, Reset Color, Edit, Delete). Fixed the
+                <em>SSH Sessions</em> tool-window icon showing dimmed/gray in the New UI.</li>
+            <li>0.4.1 — Connect to older servers that only offer legacy SHA-1 host keys
+                (re-enables ssh-rsa/ssh-dss as fallbacks), fixing
+                "Algorithm negotiation fail: server_host_key ... serverProposal=ssh-rsa,ssh-dss".</li>
+            <li>0.4.0 — Fixed the first lines of a new terminal rendering in white regardless of theme
+                (the default cell style now follows the active scheme). Colored, non-gray session icon.</li>
+            <li>0.3.0 — Terminal color schemes: ready-made templates (Classic Dark, Solarized,
+                Monokai, One Dark, Light), "Follow IDE Theme", and a fully editable Custom scheme
+                (background, foreground, selection, cursor, 16 ANSI colors) under
+                Settings → Tools → HaifaSSH Terminal. Fixes washed-out dark colors and the
+                black selection block.</li>
+            <li>0.2.0 — Import/export sessions (optionally with credentials); open terminals as editor
+                tabs (toggleable); terminals now follow the IDE dark/light theme.</li>
+            <li>0.1.0 — Initial release: session tree, embedded SSH terminal, key &amp; jump-host support.</li>
+        </ul>
+    ]]></change-notes>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- JetBrains Marketplace Error & UI Freeze Reporting -->
+        <errorHandler implementation="com.intellij.diagnostic.JetBrainsMarketplaceErrorReportSubmitter"/>
+
+        <toolWindow id="SSH Sessions"
+                    anchor="left"
+                    icon="/icons/sshSessions.svg"
+                    factoryClass="com.haifasoft.haifassh.ui.SshSessionsToolWindowFactory"/>
+
+        <toolWindow id="SSH Terminals"
+                    anchor="bottom"
+                    canCloseContents="true"
+                    icon="/icons/sshTerminals.svg"
+                    factoryClass="com.haifasoft.haifassh.terminal.SshTerminalsToolWindowFactory"/>
+
+        <toolWindow id="SFTP Browser"
+                    anchor="right"
+                    canCloseContents="false"
+                    icon="/icons/sshSessions.svg"
+                    factoryClass="com.haifasoft.haifassh.fs.ui.SftpBrowserToolWindowFactory"/>
+
+        <notificationGroup id="HaifaSSH" displayType="BALLOON"/>
+
+        <!-- Opens SSH terminals as editor tabs (where source files open). -->
+        <fileEditorProvider implementation="com.haifasoft.haifassh.terminal.editor.SshTerminalFileEditorProvider"/>
+
+        <!-- Opens SFTP / FTP file browsers as editor tabs. -->
+        <fileEditorProvider implementation="com.haifasoft.haifassh.fs.editor.RemoteFileBrowserFileEditorProvider"/>
+
+        <!-- Settings → Tools → HaifaSSH Terminal: terminal color scheme / templates. -->
+        <applicationConfigurable parentId="tools"
+                                 id="com.haifasoft.haifassh.appearance"
+                                 displayName="HaifaSSH Terminal"
+                                 instance="com.haifasoft.haifassh.ui.TerminalAppearanceConfigurable"/>
+    </extensions>
+</idea-plugin>

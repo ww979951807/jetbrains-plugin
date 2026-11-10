@@ -1,0 +1,12 @@
+<idea-plugin>
+  <id>ww97951807.script-runner</id>
+  <name>Script Runner</name>
+  <vendor>ww979951807</vendor>
+  <description>Script configurations tool window: add scripts or commands, double click to run in a terminal tab, green dot for open tabs.</description>
+  <depends>com.intellij.modules.platform</depends>
+  <depends>org.jetbrains.plugins.terminal</depends>
+  <extensions defaultExtensionNs="com.intellij">
+    <toolWindow id="Scripts" anchor="left" order="after Claude Sessions" icon="AllIcons.Toolwindows.ToolWindowRun"
+                showStripeButton="true" factoryClass="org.jetbrains.plugins.terminal.scripts.ScriptsToolWindowFactory"/>
+  </extensions>
+</idea-plugin>
