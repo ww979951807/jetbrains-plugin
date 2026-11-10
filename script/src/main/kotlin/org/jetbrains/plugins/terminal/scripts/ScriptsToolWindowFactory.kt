@@ -22,9 +22,11 @@ import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.ui.TextFieldWithBrowseButton
 import com.intellij.openapi.ui.ValidationInfo
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.IconLoader
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
+import com.intellij.openapi.wm.ex.ToolWindowManagerListener
 import com.intellij.ui.SimpleColoredComponent
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.awt.RelativePoint
@@ -41,7 +43,6 @@ import com.intellij.ui.content.ContentManagerListener
 import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
-import com.intellij.util.ui.UIUtil
 import org.jetbrains.plugins.terminal.TerminalEngine
 import org.jetbrains.plugins.terminal.TerminalOptionsProvider
 import org.jetbrains.plugins.terminal.TerminalToolWindowManager
@@ -62,6 +63,9 @@ import javax.swing.ListCellRenderer
 import javax.swing.JScrollPane
 import javax.swing.SwingUtilities
 
+// The platform's Terminal tool window id (same in 2026.2 and the 2026.3-based rebased IDE).
+private const val TERMINAL_TOOL_WINDOW_ID = "Terminal"
+
 internal class ScriptsToolWindowFactory : ToolWindowFactory, DumbAware {
   override fun shouldBeAvailable(project: Project): Boolean = true
 
@@ -72,6 +76,8 @@ internal class ScriptsToolWindowFactory : ToolWindowFactory, DumbAware {
   override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
     val panel = ScriptsPanel(project)
     val content = ContentFactory.getInstance().createContent(panel, null, true)
+    // Stops the toolwindow-show listener when this content goes away.
+    content.setDisposer(panel.listenerDisposable)
     toolWindow.contentManager.addContent(content)
   }
 }
@@ -108,6 +114,8 @@ internal class ScriptsConfigService : PersistentStateComponent<ScriptsConfigServ
 internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPanel(true) {
   private val listModel = DefaultListModel<ScriptConfig>()
   private val list = JBList(listModel)
+  // Disposes the message-bus connection (owned by the toolwindow content's disposer).
+  val listenerDisposable = Disposer.newDisposable("ScriptsPanel")
 
   init {
     toolbar = buildToolbar().component
@@ -142,13 +150,30 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
         }
       }
     })
-    runCatching {
-      TerminalToolWindowManager.getInstance(project).toolWindow?.addContentManagerListener(object : ContentManagerListener {
-        override fun contentRemoved(event: ContentManagerEvent) = list.repaint()
-        override fun contentAdded(event: ContentManagerEvent) = list.repaint()
-      })
-    }
+    // The Terminal tool window may not exist yet when this panel is created — attaching the
+    // content listener here used to silently no-op (the toolWindow getter returned null), so
+    // closing a background tab never repainted the running-dots. Attach now if it exists, and
+    // again on every toolwindow-show event until it does.
+    attachTerminalListener()
+    project.messageBus.connect(listenerDisposable).subscribe(ToolWindowManagerListener.TOPIC, object : ToolWindowManagerListener {
+      override fun toolWindowShown(toolWindow: ToolWindow) {
+        if (toolWindow.id == TERMINAL_TOOL_WINDOW_ID) attachTerminalListener()
+      }
+    })
     reloadList()
+  }
+
+  // Repaints the running-dots when terminal tabs appear or disappear.
+  private var terminalListenerAttached = false
+
+  private fun attachTerminalListener() {
+    if (terminalListenerAttached) return
+    val tw = TerminalToolWindowManager.getInstance(project).toolWindow ?: return
+    tw.addContentManagerListener(object : ContentManagerListener {
+      override fun contentRemoved(event: ContentManagerEvent) = list.repaint()
+      override fun contentAdded(event: ContentManagerEvent) = list.repaint()
+    })
+    terminalListenerAttached = true
   }
 
   private fun buildToolbar(): com.intellij.openapi.actionSystem.ActionToolbar {
@@ -309,16 +334,29 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
     }
   }
 
+  // Pixel-based ellipsis: SimpleColoredComponent clips long text instead of showing "…".
+  // Reserve covers the renderer paddings, the icon + gap (title line only) and the scrollbar.
+  private fun abbreviate(text: String, bold: Boolean, reserve: Int): String {
+    val font = if (bold) list.font.deriveFont(java.awt.Font.BOLD) else list.font
+    val fm = list.getFontMetrics(font)
+    val available = list.width - JBUI.scale(reserve)
+    if (available <= 0 || fm.stringWidth(text) <= available) return text
+    var s = text
+    while (s.isNotEmpty() && fm.stringWidth("$s…") > available) s = s.dropLast(1)
+    return "$s…"
+  }
+
   // Native two-line row per the approved prototype: title line = green running-dot (when the
   // script has a terminal tab) + bold name, gray command preview below. WideSelectionListUI
-  // (set on the list in init) paints the selection edge-to-edge across the FULL row.
-  // Selection is read from the model (the callback may lie).
+  // (set on the list in init) paints the selection/hover fill edge-to-edge across the FULL
+  // row, UNDER the renderer — so the renderer must stay non-opaque or it covers that fill,
+  // leaving only the focus ring visible.
   private inner class ScriptRenderer : JPanel(BorderLayout()), ListCellRenderer<ScriptConfig> {
     private val titleLine = SimpleColoredComponent()
     private val metaLine = SimpleColoredComponent()
 
     init {
-      isOpaque = true
+      isOpaque = false
       val lines = JPanel(GridLayout(2, 1))
       lines.isOpaque = false
       lines.add(titleLine)
@@ -334,11 +372,11 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
       titleLine.clear()
       metaLine.clear()
       titleLine.icon = if (isOpen(cfg)) dotIcon else iconFor(cfg)
-      titleLine.append(cfg.name, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
+      titleLine.append(abbreviate(cfg.name, bold = true, reserve = 12 + 10 + 16 + 8 + 14), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
+      titleLine.toolTipText = cfg.name
       metaLine.border = JBUI.Borders.emptyLeft(0)
-      metaLine.append(commandFor(cfg), SimpleTextAttributes.GRAYED_ATTRIBUTES)
-      val sel = selected || list.isSelectedIndex(index)
-      background = if (sel) UIUtil.getListSelectionBackground(true) else list.background
+      metaLine.append(abbreviate(commandFor(cfg), bold = false, reserve = 12 + 10 + 14), SimpleTextAttributes.GRAYED_ATTRIBUTES)
+      metaLine.toolTipText = commandFor(cfg)
       foreground = list.foreground
       return this
     }
@@ -346,18 +384,22 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
 }
 
 internal class ScriptConfigDialog(private val project: Project, private val existing: ScriptConfig?) : DialogWrapper(project) {
+  // Field column width matches the prototype's 520px dialog proportions; height stays native.
   private val nameField = object : JBTextField() {
-    override fun getPreferredSize() = java.awt.Dimension(super.getPreferredSize().width, JBUI.scale(28))
+    override fun getPreferredSize() = java.awt.Dimension(JBUI.scale(380), super.getPreferredSize().height)
   }
   private val fileRadio = JBRadioButton("Script file", true)
   private val textRadio = JBRadioButton("Script text")
   private val fileField = object : TextFieldWithBrowseButton() {
-    override fun getPreferredSize() = java.awt.Dimension(super.getPreferredSize().width, JBUI.scale(28))
+    override fun getPreferredSize() = java.awt.Dimension(JBUI.scale(380), super.getPreferredSize().height)
   }
-  private val textArea = JBTextArea(4, 44)
+  private val textArea = JBTextArea(4, 46)
   private val workDirField = object : TextFieldWithBrowseButton() {
-    override fun getPreferredSize() = java.awt.Dimension(super.getPreferredSize().width, JBUI.scale(28))
+    override fun getPreferredSize() = java.awt.Dimension(JBUI.scale(380), super.getPreferredSize().height)
   }
+  // The third row's label follows the type toggle ("Script file:" / "Script text:"), like the
+  // prototype's two-column form.
+  private val contentLabel = javax.swing.JLabel("Script file:")
   private val cards = JPanel(BorderLayout())
 
   init {
@@ -371,9 +413,8 @@ internal class ScriptConfigDialog(private val project: Project, private val exis
     textRadio.addActionListener { syncTypeUi() }
 
     // Only the current field stays in the layout, so the dialog is as tall as that field
-    // requires (a CardLayout would stay as tall as the 8-row text area even in file mode).
+    // requires (a CardLayout would stay as tall as the 4-row text area even in file mode).
     cards.add(fileField, BorderLayout.CENTER)
-    cards.border = JBUI.Borders.emptyTop(8)
 
     existing?.let {
       nameField.text = it.name
@@ -387,6 +428,7 @@ internal class ScriptConfigDialog(private val project: Project, private val exis
   }
 
   private fun syncTypeUi() {
+    contentLabel.text = if (fileRadio.isSelected) "Script file:" else "Script text:"
     cards.removeAll()
     cards.add(if (fileRadio.isSelected) fileField else JBScrollPane(textArea), BorderLayout.CENTER)
     cards.revalidate()
@@ -405,7 +447,7 @@ internal class ScriptConfigDialog(private val project: Project, private val exis
     return FormBuilder.createFormBuilder()
       .addLabeledComponent("Name:", nameField)
       .addLabeledComponent("Type:", typePanel)
-      .addComponent(cards)
+      .addLabeledComponent(contentLabel, cards)
       .addLabeledComponent("Working directory:", workDirField)
       .panel
   }

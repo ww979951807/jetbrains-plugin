@@ -186,4 +186,17 @@
                                  displayName="HaifaSSH Terminal"
                                  instance="com.haifasoft.haifassh.ui.TerminalAppearanceConfigurable"/>
     </extensions>
+
+    <actions>
+        <!-- Right-click on an SSH terminal tab title: open another session to the same server.
+             The platform builds the tab popup from this group (content.setActions is not read
+             by the 2026.3 toolwindow header). Hidden unless the tab carries an SshSession. -->
+        <action id="HaifaSsh.DuplicateSession"
+                class="com.haifasoft.haifassh.terminal.DuplicateSessionAction"
+                text="Duplicate Session"
+                description="Open another session to the same server"
+                icon="AllIcons.Actions.Copy">
+            <add-to-group group-id="ToolWindowTabContextMenu" anchor="first"/>
+        </action>
+    </actions>
 </idea-plugin>

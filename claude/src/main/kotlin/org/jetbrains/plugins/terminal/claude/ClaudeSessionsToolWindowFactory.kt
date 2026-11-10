@@ -13,9 +13,11 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.IconLoader
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
+import com.intellij.openapi.wm.ex.ToolWindowManagerListener
 import com.intellij.ui.SimpleColoredComponent
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.awt.RelativePoint
@@ -28,7 +30,6 @@ import com.intellij.ui.content.ContentManagerEvent
 import com.intellij.ui.content.ContentManagerListener
 import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.ui.JBUI
-import com.intellij.util.ui.UIUtil
 import org.jetbrains.plugins.terminal.ShellTerminalWidget
 import org.jetbrains.plugins.terminal.TerminalEngine
 import org.jetbrains.plugins.terminal.TerminalOptionsProvider
@@ -50,6 +51,9 @@ import javax.swing.JPanel
 import javax.swing.ListCellRenderer
 import javax.swing.SwingUtilities
 
+// The platform's Terminal tool window id (same in 2026.2 and the 2026.3-based rebased IDE).
+private const val TERMINAL_TOOL_WINDOW_ID = "Terminal"
+
 internal class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
   override fun shouldBeAvailable(project: Project): Boolean = true
 
@@ -60,6 +64,8 @@ internal class ClaudeSessionsToolWindowFactory : ToolWindowFactory, DumbAware {
   override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
     val panel = ClaudeSessionsPanel(project)
     val content = ContentFactory.getInstance().createContent(panel, null, true)
+    // Stops the toolwindow-show listener when this content goes away.
+    content.setDisposer(panel.listenerDisposable)
     toolWindow.contentManager.addContent(content)
   }
 }
@@ -69,6 +75,8 @@ internal data class ClaudeSessionInfo(val id: String, val title: String, val las
 internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWindowPanel(true) {
   private val listModel = DefaultListModel<ClaudeSessionInfo>()
   private val list = JBList(listModel)
+  // Disposes the message-bus connection (owned by the toolwindow content's disposer).
+  val listenerDisposable = Disposer.newDisposable("ClaudeSessionsPanel")
   @Volatile private var newestFirst = true
   private val aiTitleRegex = Regex("\"aiTitle\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")
   private val textRegex = Regex("\"type\"\\s*:\\s*\"text\"\\s*,\\s*\"text\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")
@@ -107,13 +115,30 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
         }
       }
     })
-    runCatching {
-      TerminalToolWindowManager.getInstance(project).toolWindow?.addContentManagerListener(object : ContentManagerListener {
-        override fun contentRemoved(event: ContentManagerEvent) = list.repaint()
-        override fun contentAdded(event: ContentManagerEvent) = list.repaint()
-      })
-    }
+    // The Terminal tool window may not exist yet when this panel is created — attaching the
+    // content listener here used to silently no-op (the toolWindow getter returned null), so
+    // closing a background tab never repainted the open-dots. Attach now if it exists, and
+    // again on every toolwindow-show event until it does.
+    attachTerminalListener()
+    project.messageBus.connect(listenerDisposable).subscribe(ToolWindowManagerListener.TOPIC, object : ToolWindowManagerListener {
+      override fun toolWindowShown(toolWindow: ToolWindow) {
+        if (toolWindow.id == TERMINAL_TOOL_WINDOW_ID) attachTerminalListener()
+      }
+    })
     refresh()
+  }
+
+  // Repaints the open-dots when terminal tabs appear or disappear.
+  private var terminalListenerAttached = false
+
+  private fun attachTerminalListener() {
+    if (terminalListenerAttached) return
+    val tw = TerminalToolWindowManager.getInstance(project).toolWindow ?: return
+    tw.addContentManagerListener(object : ContentManagerListener {
+      override fun contentRemoved(event: ContentManagerEvent) = list.repaint()
+      override fun contentAdded(event: ContentManagerEvent) = list.repaint()
+    })
+    terminalListenerAttached = true
   }
 
   private fun buildToolbar(): com.intellij.openapi.actionSystem.ActionToolbar {
@@ -439,17 +464,29 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
   private val sessionIcon = IconLoader.getIcon("/icons/rebased/claudeSessions.svg", ClaudeSessionsPanel::class.java)
   private val dotIcon = IconLoader.getIcon("/icons/rebased/sessionDot.svg", ClaudeSessionsPanel::class.java)
 
+  // Pixel-based ellipsis: SimpleColoredComponent clips long text instead of showing "…".
+  // Reserve covers the renderer paddings, the icon + gap (title line only) and the scrollbar.
+  private fun abbreviate(text: String, bold: Boolean, reserve: Int): String {
+    val font = if (bold) list.font.deriveFont(java.awt.Font.BOLD) else list.font
+    val fm = list.getFontMetrics(font)
+    val available = list.width - JBUI.scale(reserve)
+    if (available <= 0 || fm.stringWidth(text) <= available) return text
+    var s = text
+    while (s.isNotEmpty() && fm.stringWidth("$s…") > available) s = s.dropLast(1)
+    return "$s…"
+  }
+
   // Native two-line row per the approved prototype: title line = green open-dot (when the
   // session has a terminal tab) + bold title; meta line in gray. WideSelectionListUI (set on
-  // the list in init) paints the selection edge-to-edge across the FULL row — the prototype's
-  // color band. Selection is read from the model — the renderer callback may pass
-  // selected=false even for the selected row.
+  // the list in init) paints the selection/hover fill edge-to-edge across the FULL row, UNDER
+  // the renderer — so the renderer must stay non-opaque or it covers that fill, leaving only
+  // the focus ring visible.
   private inner class SessionRenderer : JPanel(BorderLayout()), ListCellRenderer<ClaudeSessionInfo> {
     private val titleLine = SimpleColoredComponent()
     private val metaLine = SimpleColoredComponent()
 
     init {
-      isOpaque = true
+      isOpaque = false
       val lines = JPanel(GridLayout(2, 1))
       lines.isOpaque = false
       lines.add(titleLine)
@@ -466,12 +503,13 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
       metaLine.clear()
       val open = isSessionOpen(info.id)
       titleLine.icon = if (open) dotIcon else sessionIcon
-      titleLine.append(info.title, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
+      titleLine.append(abbreviate(info.title, bold = true, reserve = 12 + 10 + 16 + 8 + 14), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
+      titleLine.toolTipText = info.title
       val time = SimpleDateFormat("yyyy-MM-dd HH:mm").format(Date(info.lastModified))
+      val meta = "$time · ${formatSize(info.sizeBytes)} · ${info.id.take(8)} · ${info.messageCount}"
       metaLine.border = JBUI.Borders.emptyLeft(0)
-      metaLine.append("$time · ${formatSize(info.sizeBytes)} · ${info.id.take(8)} · ${info.messageCount}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
-      val sel = selected || list.isSelectedIndex(index)
-      background = if (sel) UIUtil.getListSelectionBackground(true) else list.background
+      metaLine.append(abbreviate(meta, bold = false, reserve = 12 + 10 + 14), SimpleTextAttributes.GRAYED_ATTRIBUTES)
+      metaLine.toolTipText = meta
       foreground = list.foreground
       return this
     }

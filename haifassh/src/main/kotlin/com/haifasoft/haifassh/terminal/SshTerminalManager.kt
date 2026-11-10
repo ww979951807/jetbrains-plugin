@@ -2,11 +2,7 @@ package com.haifasoft.haifassh.terminal
 
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
-import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.actionSystem.AnAction
-import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.fileEditor.FileEditorManager
@@ -94,9 +90,9 @@ class SshTerminalManager(private val project: Project) {
 
         val content = ContentFactory.getInstance().createContent(pane.component, session.displayName(), false)
         content.isCloseable = true
-        // The session travels with the content so the tab-title popup can reconnect to it.
+        // The session travels with the content so DuplicateSessionAction (registered in the
+        // platform's ToolWindowTabContextMenu group) can duplicate it from the tab popup.
         content.putUserData(SESSION_KEY, session)
-        content.setActions(duplicateSessionActions(session), "TOOLWINDOW_TITLE", pane.component)
         content.setDisposer(Disposable {
             runCatching { pane.dispose() }
             Disposer.dispose(lifetime)
@@ -106,15 +102,6 @@ class SshTerminalManager(private val project: Project) {
         toolWindow.contentManager.addContent(content)
         toolWindow.contentManager.setSelectedContent(content)
         toolWindow.activate { pane.preferredFocus.requestFocusInWindow() }
-    }
-
-    /** Right-click / gear menu on the terminal tab title: opens another session to the same server. */
-    private fun duplicateSessionActions(session: SshSession): DefaultActionGroup = DefaultActionGroup().apply {
-        add(object : AnAction("Duplicate Session", "Open another session to ${session.displayName()}", AllIcons.Actions.Copy) {
-            override fun actionPerformed(e: AnActionEvent) {
-                SshTerminalManager.getInstance(project).connect(session)
-            }
-        })
     }
 
     private fun notifyError(message: String) {
