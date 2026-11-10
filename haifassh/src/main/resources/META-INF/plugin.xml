@@ -157,13 +157,13 @@
 
         <toolWindow id="SSH Sessions"
                     anchor="left"
-                    icon="/icons/sshSessions.svg"
+                    icon="/icons/sftpFolder.svg"
                     factoryClass="com.haifasoft.haifassh.ui.SshSessionsToolWindowFactory"/>
 
         <toolWindow id="SSH Terminals"
                     anchor="bottom"
                     canCloseContents="true"
-                    icon="/icons/sshTerminals.svg"
+                    icon="/icons/sshTerminalsRemote.svg"
                     factoryClass="com.haifasoft.haifassh.terminal.SshTerminalsToolWindowFactory"/>
 
         <toolWindow id="SFTP Browser"
