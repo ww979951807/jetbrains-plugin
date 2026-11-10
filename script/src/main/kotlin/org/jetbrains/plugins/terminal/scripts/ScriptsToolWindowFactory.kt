@@ -178,7 +178,7 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
           else if (c.displayName.length > 10) c.setDisplayName(abbreviate(c.displayName, 10))
         }
       }
-    }, 2, 2, TimeUnit.SECONDS)
+    }, 1, 1, TimeUnit.SECONDS)
     Disposer.register(listenerDisposable) { titleClamp.cancel(false) }
     reloadList()
   }
