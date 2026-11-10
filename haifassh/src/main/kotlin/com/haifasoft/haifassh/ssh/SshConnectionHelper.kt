@@ -1,5 +1,6 @@
 package com.haifasoft.haifassh.ssh
 
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.haifasoft.haifassh.model.SshAuthType
