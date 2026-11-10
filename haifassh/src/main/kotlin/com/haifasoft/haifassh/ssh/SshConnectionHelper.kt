@@ -1,6 +1,5 @@
 package com.haifasoft.haifassh.ssh
 
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.haifasoft.haifassh.model.SshAuthType
@@ -93,9 +92,13 @@ object SshConnectionHelper {
         }
 
         override fun notify(message: String) {
-            ApplicationManager.getApplication().invokeAndWait {
-                Messages.showWarningDialog(project, message, "SSH Host Key Warning")
-            }
+            // JSch routes the server's auth banner (sshd `Banner /etc/issue.net`, e.g.
+            // "Authorized users only...") through UserInfo.showMessage. Popping a modal
+            // for it on every connect is noise — host-key decisions still go through
+            // confirm(). Log it instead.
+            LOG.info("SSH server message: $message")
         }
+
+        private val LOG = com.intellij.openapi.diagnostic.Logger.getInstance(SshConnectionHelper::class.java)
     }
 }

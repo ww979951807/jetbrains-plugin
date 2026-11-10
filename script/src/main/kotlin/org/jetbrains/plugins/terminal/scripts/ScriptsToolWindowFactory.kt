@@ -33,6 +33,7 @@ import com.intellij.ui.components.JBRadioButton
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
+import com.intellij.ui.components.WideSelectionListUI
 import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.content.ContentManagerEvent
@@ -55,7 +56,6 @@ import java.util.Locale
 import javax.swing.ButtonGroup
 import javax.swing.DefaultListModel
 import javax.swing.JComponent
-import javax.swing.JLabel
 import javax.swing.JList
 import javax.swing.JPanel
 import javax.swing.ListCellRenderer
@@ -112,6 +112,9 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
   init {
     toolbar = buildToolbar().component
     setContent(JBScrollPane(list))
+    // Platform-native wide-selection UI: paints the selection edge-to-edge across the full
+    // row (the prototype's color band) instead of the padded rounded rect.
+    list.setUI(WideSelectionListUI())
     list.cellRenderer = ScriptRenderer()
     list.addMouseListener(object : MouseAdapter() {
       override fun mouseClicked(e: MouseEvent) {
@@ -123,10 +126,13 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
           val cfg = listModel[index]
           if (e.clickCount >= 2) {
             // Double click: run the script (switch to its tab or start it in a new one).
+            list.selectedIndex = index
             runOrSwitch(cfg)
           }
           else if (e.clickCount == 1) {
-            // Single click: only switch to the tab when it is already open, never run anything.
+            // Single click: keep the row selection (color overlay) in sync, and switch to
+            // the tab only when it is already open — never run anything.
+            list.selectedIndex = index
             switchToOpenTab(cfg)
           }
         }
@@ -166,9 +172,13 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
 
   private fun tabNameOf(cfg: ScriptConfig) = "script:${cfg.name}"
 
-  private fun isOpen(cfg: ScriptConfig): Boolean =
+  // Open-tab lookup goes through the Content userData marker written at creation time;
+  // displayName matching is unreliable because the process title overrides it.
+  private fun findTabContent(cfg: ScriptConfig): Content? =
     TerminalToolWindowManager.getInstance(project).toolWindow?.contentManager?.contents
-      ?.firstOrNull { it.displayName == "script:${cfg.name}" } != null
+      ?.firstOrNull { it.getUserData(TAB_NAME_KEY) == tabNameOf(cfg) || it.displayName == tabNameOf(cfg) }
+
+  private fun isOpen(cfg: ScriptConfig): Boolean = findTabContent(cfg) != null
 
   private fun workDirOf(cfg: ScriptConfig): String? =
     cfg.workDir.trim().ifEmpty { project.basePath }
@@ -191,6 +201,8 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
   // when the frontend service is unavailable.
   private fun executeInNewTab(tabName: String, workDir: String?, command: String) {
     ApplicationManager.getApplication().invokeLater {
+      val before = TerminalToolWindowManager.getInstance(project).toolWindow
+        ?.contentManager?.contents?.toSet() ?: emptySet()
       var started = false
       if (TerminalOptionsProvider.instance.terminalEngine == TerminalEngine.REWORKED) {
         started = runCatching { TabCommandRunner(project).createTabAndRunCommand(workDir, tabName, command) }
@@ -203,38 +215,39 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
           widget.executeCommand(command)
         }
       }
+      // Classic path has no direct Content handle: mark whatever tabs appeared.
+      TerminalToolWindowManager.getInstance(project).toolWindow?.contentManager?.contents
+        ?.filter { it !in before }
+        ?.forEach { it.putUserData(TAB_NAME_KEY, tabName) }
       list.repaint()
     }
   }
 
   private fun runOrSwitch(cfg: ScriptConfig) {
-    val tabName = "script:${cfg.name}"
-    val tw = TerminalToolWindowManager.getInstance(project).toolWindow
-    val existing = tw?.contentManager?.contents?.firstOrNull { it.displayName == tabName }
+    val existing = findTabContent(cfg)
     if (existing != null) {
+      val tw = TerminalToolWindowManager.getInstance(project).toolWindow ?: return
       tw.activate {
         tw.contentManager.setSelectedContent(existing, true)
       }
       return
     }
-    executeInNewTab(tabName, workDirOf(cfg), commandFor(cfg))
+    executeInNewTab(tabNameOf(cfg), workDirOf(cfg), commandFor(cfg))
   }
 
   // Single click: switch to the script's terminal tab only when it is already open.
   private fun switchToOpenTab(cfg: ScriptConfig) {
+    val content = findTabContent(cfg) ?: return
     val tw = TerminalToolWindowManager.getInstance(project).toolWindow ?: return
-    val content = tw.contentManager.contents.firstOrNull { it.displayName == tabNameOf(cfg) } ?: return
     tw.activate { tw.contentManager.setSelectedContent(content, true) }
   }
 
   private fun rerunScript(cfg: ScriptConfig) {
-    val tabName = "script:${cfg.name}"
-    val tw = TerminalToolWindowManager.getInstance(project).toolWindow
-    val existing = tw?.contentManager?.contents?.firstOrNull { it.displayName == tabName }
+    val existing = findTabContent(cfg)
     if (existing != null) {
       runCatching { existing.manager?.removeContent(existing, true) }
     }
-    executeInNewTab(tabName, workDirOf(cfg), commandFor(cfg))
+    executeInNewTab(tabNameOf(cfg), workDirOf(cfg), commandFor(cfg))
   }
 
   private fun showContextMenu(e: MouseEvent, cfg: ScriptConfig) {
@@ -261,9 +274,7 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
           "Delete script configuration \"${cfg.name}\"?",
           "Delete Script", Messages.getQuestionIcon())
         if (answer != Messages.YES) return@actionPerformed
-        val content = TerminalToolWindowManager.getInstance(project).toolWindow?.contentManager?.contents
-          ?.firstOrNull { it.displayName == "script:${cfg.name}" }
-        if (content != null) {
+        findTabContent(cfg)?.let { content ->
           runCatching { content.manager?.removeContent(content, true) }
         }
         ScriptsConfigService.getInstance(project).configs().remove(cfg)
@@ -298,13 +309,13 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
     }
   }
 
-  // Native two-line row: leading script-type icon, bold name, gray command preview, green
-  // open-dot at the row end. Opaque + explicit background so the list spreads the selection
-  // across the FULL row width; selection read from the model (the callback may lie).
+  // Native two-line row per the approved prototype: title line = green running-dot (when the
+  // script has a terminal tab) + bold name, gray command preview below. WideSelectionListUI
+  // (set on the list in init) paints the selection edge-to-edge across the FULL row.
+  // Selection is read from the model (the callback may lie).
   private inner class ScriptRenderer : JPanel(BorderLayout()), ListCellRenderer<ScriptConfig> {
     private val titleLine = SimpleColoredComponent()
     private val metaLine = SimpleColoredComponent()
-    private val dotLabel = JLabel(dotIcon)
 
     init {
       isOpaque = true
@@ -313,9 +324,8 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
       lines.add(titleLine)
       lines.add(metaLine)
       titleLine.border = JBUI.Borders.emptyBottom(4)
+      titleLine.iconTextGap = 8
       add(lines, BorderLayout.CENTER)
-      dotLabel.border = JBUI.Borders.empty(0, 12, 0, 2)
-      add(dotLabel, BorderLayout.EAST)
       border = JBUI.Borders.empty(10, 12, 10, 10)
     }
 
@@ -323,27 +333,31 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
       val cfg = value ?: return this
       titleLine.clear()
       metaLine.clear()
-      titleLine.icon = iconFor(cfg)
-      titleLine.iconTextGap = 12
+      titleLine.icon = if (isOpen(cfg)) dotIcon else iconFor(cfg)
       titleLine.append(cfg.name, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
-      metaLine.border = JBUI.Borders.emptyLeft(28)
+      metaLine.border = JBUI.Borders.emptyLeft(0)
       metaLine.append(commandFor(cfg), SimpleTextAttributes.GRAYED_ATTRIBUTES)
       val sel = selected || list.isSelectedIndex(index)
       background = if (sel) UIUtil.getListSelectionBackground(true) else list.background
       foreground = list.foreground
-      dotLabel.isVisible = isOpen(cfg)
       return this
     }
   }
 }
 
 internal class ScriptConfigDialog(private val project: Project, private val existing: ScriptConfig?) : DialogWrapper(project) {
-  private val nameField = JBTextField()
+  private val nameField = object : JBTextField() {
+    override fun getPreferredSize() = java.awt.Dimension(super.getPreferredSize().width, JBUI.scale(28))
+  }
   private val fileRadio = JBRadioButton("Script file", true)
   private val textRadio = JBRadioButton("Script text")
-  private val fileField = TextFieldWithBrowseButton()
-  private val textArea = JBTextArea(8, 46)
-  private val workDirField = TextFieldWithBrowseButton()
+  private val fileField = object : TextFieldWithBrowseButton() {
+    override fun getPreferredSize() = java.awt.Dimension(super.getPreferredSize().width, JBUI.scale(28))
+  }
+  private val textArea = JBTextArea(4, 44)
+  private val workDirField = object : TextFieldWithBrowseButton() {
+    override fun getPreferredSize() = java.awt.Dimension(super.getPreferredSize().width, JBUI.scale(28))
+  }
   private val cards = JPanel(BorderLayout())
 
   init {

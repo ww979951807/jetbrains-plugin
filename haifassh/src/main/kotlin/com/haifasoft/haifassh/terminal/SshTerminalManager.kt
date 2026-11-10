@@ -2,7 +2,11 @@ package com.haifasoft.haifassh.terminal
 
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.fileEditor.FileEditorManager
@@ -11,6 +15,7 @@ import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.util.Key
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.content.ContentFactory
 import com.haifasoft.haifassh.model.SshAuthType
@@ -89,6 +94,9 @@ class SshTerminalManager(private val project: Project) {
 
         val content = ContentFactory.getInstance().createContent(pane.component, session.displayName(), false)
         content.isCloseable = true
+        // The session travels with the content so the tab-title popup can reconnect to it.
+        content.putUserData(SESSION_KEY, session)
+        content.setActions(duplicateSessionActions(session), "TOOLWINDOW_TITLE", pane.component)
         content.setDisposer(Disposable {
             runCatching { pane.dispose() }
             Disposer.dispose(lifetime)
@@ -98,6 +106,15 @@ class SshTerminalManager(private val project: Project) {
         toolWindow.contentManager.addContent(content)
         toolWindow.contentManager.setSelectedContent(content)
         toolWindow.activate { pane.preferredFocus.requestFocusInWindow() }
+    }
+
+    /** Right-click / gear menu on the terminal tab title: opens another session to the same server. */
+    private fun duplicateSessionActions(session: SshSession): DefaultActionGroup = DefaultActionGroup().apply {
+        add(object : AnAction("Duplicate Session", "Open another session to ${session.displayName()}", AllIcons.Actions.Copy) {
+            override fun actionPerformed(e: AnActionEvent) {
+                SshTerminalManager.getInstance(project).connect(session)
+            }
+        })
     }
 
     private fun notifyError(message: String) {
@@ -112,6 +129,9 @@ class SshTerminalManager(private val project: Project) {
     companion object {
         const val TERMINALS_TOOL_WINDOW_ID = "SSH Terminals"
         const val NOTIFICATION_GROUP_ID = "HaifaSSH"
+
+        /** Carries the [SshSession] behind a terminal tab (used by the tab-title popup). */
+        val SESSION_KEY: Key<SshSession> = Key.create("haifassh.terminal.session")
 
         fun getInstance(project: Project): SshTerminalManager = project.getService(SshTerminalManager::class.java)
     }

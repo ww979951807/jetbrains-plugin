@@ -21,6 +21,7 @@ import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.awt.RelativePoint
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.components.WideSelectionListUI
 import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.content.ContentManagerEvent
@@ -44,7 +45,6 @@ import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import javax.swing.DefaultListModel
-import javax.swing.JLabel
 import javax.swing.JList
 import javax.swing.JPanel
 import javax.swing.ListCellRenderer
@@ -77,6 +77,9 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
   init {
     toolbar = buildToolbar().component
     setContent(JBScrollPane(list))
+    // Platform-native wide-selection UI: paints the selection edge-to-edge across the full
+    // row (the prototype's color band) instead of the padded rounded rect.
+    list.setUI(WideSelectionListUI())
     list.cellRenderer = SessionRenderer()
     list.addMouseListener(object : MouseAdapter() {
       override fun mouseClicked(e: MouseEvent) {
@@ -88,10 +91,13 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
           val info = listModel[index]
           if (e.clickCount >= 2) {
             // Double click: open the session (switch to its tab or start it in a new one).
+            list.selectedIndex = index
             openSession(info)
           }
           else if (e.clickCount == 1) {
-            // Single click: only switch to the tab when it is already open, never start anything.
+            // Single click: keep the row selection (color overlay) in sync, and switch to
+            // the tab only when it is already open — never start anything.
+            list.selectedIndex = index
             switchToOpenTab(info)
           }
         }
@@ -247,27 +253,32 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
 
   private fun sessionFile(id: String) = File(projectDir(), "$id.jsonl")
 
-  private fun isSessionOpen(id: String): Boolean =
-    openClaudeContent(id) != null
+  // Open-tab lookup goes through the Content userData marker written at creation time;
+  // displayName matching is unreliable because the shell process title overrides it.
+  private fun tabNameOf(id: String) = "claude:${id.take(8)}"
 
-  private fun openClaudeContent(id: String): Content? {
-    val shortId = id.take(8)
+  private fun findTabContent(id: String): Content? {
     val tw = TerminalToolWindowManager.getInstance(project).toolWindow ?: return null
-    return tw.contentManager.contents.firstOrNull { it.displayName == "claude:$shortId" }
+    return tw.contentManager.contents.firstOrNull {
+      it.getUserData(TAB_NAME_KEY) == tabNameOf(id) || it.displayName == tabNameOf(id)
+    }
   }
 
-  private fun openSession(info: ClaudeSessionInfo) = openClaude("claude:${info.id.take(8)}", "claude --resume ${info.id}")
+  private fun isSessionOpen(id: String): Boolean =
+    findTabContent(id) != null
+
+  private fun openSession(info: ClaudeSessionInfo) = openClaude(tabNameOf(info.id), "claude --resume ${info.id}")
 
   // Single click: switch to the session's terminal tab only when it is already open.
   private fun switchToOpenTab(info: ClaudeSessionInfo) {
-    val content = openClaudeContent(info.id) ?: return
+    val content = findTabContent(info.id) ?: return
     val tw = TerminalToolWindowManager.getInstance(project).toolWindow ?: return
     tw.activate { tw.contentManager.setSelectedContent(content, true) }
   }
 
   private fun openClaude(tabName: String, command: String) {
     val toolWindow = TerminalToolWindowManager.getInstance(project).toolWindow
-    val existing = toolWindow?.contentManager?.contents?.firstOrNull { it.displayName == tabName }
+    val existing = toolWindow?.contentManager?.contents?.firstOrNull { it.getUserData(TAB_NAME_KEY) == tabName || it.displayName == tabName }
     if (existing != null) {
       toolWindow.activate {
         toolWindow.contentManager.setSelectedContent(existing, true)
@@ -278,9 +289,9 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
   }
 
   private fun rerunSession(info: ClaudeSessionInfo) {
-    val tabName = "claude:${info.id.take(8)}"
+    val tabName = tabNameOf(info.id)
     val toolWindow = TerminalToolWindowManager.getInstance(project).toolWindow
-    val existing = toolWindow?.contentManager?.contents?.firstOrNull { it.displayName == tabName }
+    val existing = toolWindow?.contentManager?.contents?.firstOrNull { it.getUserData(TAB_NAME_KEY) == tabName || it.displayName == tabName }
     if (existing != null) {
       runCatching { existing.manager?.removeContent(existing, true) }
     }
@@ -293,6 +304,8 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
   private fun startCommand(tabName: String, command: String) {
     val workDir = project.basePath
     ApplicationManager.getApplication().invokeLater {
+      val before = TerminalToolWindowManager.getInstance(project).toolWindow
+        ?.contentManager?.contents?.toSet() ?: emptySet()
       var started = false
       if (TerminalOptionsProvider.instance.terminalEngine == TerminalEngine.REWORKED) {
         started = runCatching { TabCommandRunner(project).createTabAndRunCommand(workDir, tabName, command) }
@@ -305,6 +318,10 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
           widget.executeCommand(command)
         }
       }
+      // Classic path has no direct Content handle: mark whatever tabs appeared.
+      TerminalToolWindowManager.getInstance(project).toolWindow?.contentManager?.contents
+        ?.filter { it !in before }
+        ?.forEach { it.putUserData(TAB_NAME_KEY, tabName) }
       list.repaint()
     }
   }
@@ -321,12 +338,15 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
       SwingUtilities.invokeLater {
         val n = counter.incrementAndGet()
         val tw = TerminalToolWindowManager.getInstance(project).toolWindow
-        val content = tw?.contentManager?.contents?.firstOrNull { it.displayName == "claude:new" }
+        val content = tw?.contentManager?.contents
+          ?.firstOrNull { it.getUserData(TAB_NAME_KEY) == "claude:new" || it.displayName == "claude:new" }
         val fresh = projectDir().listFiles { f -> f.isFile && f.name.endsWith(".jsonl") }
           ?.filter { it.lastModified() > clickTime }
           ?.maxByOrNull { it.lastModified() }
         if (fresh != null && content != null) {
-          content.setDisplayName("claude:${fresh.name.removeSuffix(".jsonl").take(8)}")
+          val tabName = "claude:${fresh.name.removeSuffix(".jsonl").take(8)}"
+          content.putUserData(TAB_NAME_KEY, tabName)
+          content.setDisplayName(tabName)
         }
         if (content == null || fresh != null || n >= 40) {
           newSessionWatch?.cancel(false)
@@ -420,15 +440,14 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
   private val sessionIcon = IconLoader.getIcon("/icons/rebased/claudeSessions.svg", ClaudeSessionsPanel::class.java)
   private val dotIcon = IconLoader.getIcon("/icons/rebased/sessionDot.svg", ClaudeSessionsPanel::class.java)
 
-  // Native two-line row: leading session icon, bold title, gray meta line, green open-dot at
-  // the row end. The panel stays opaque with an explicit background: WideSelectionListUI
-  // spreads the renderer background across the FULL row width, which gives the prototype's
-  // edge-to-edge selection. Selection is read from the model — the renderer callback may
-  // pass selected=false even for the selected row.
+  // Native two-line row per the approved prototype: title line = green open-dot (when the
+  // session has a terminal tab) + bold title; meta line in gray. WideSelectionListUI (set on
+  // the list in init) paints the selection edge-to-edge across the FULL row — the prototype's
+  // color band. Selection is read from the model — the renderer callback may pass
+  // selected=false even for the selected row.
   private inner class SessionRenderer : JPanel(BorderLayout()), ListCellRenderer<ClaudeSessionInfo> {
     private val titleLine = SimpleColoredComponent()
     private val metaLine = SimpleColoredComponent()
-    private val dotLabel = JLabel(dotIcon)
 
     init {
       isOpaque = true
@@ -437,9 +456,8 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
       lines.add(titleLine)
       lines.add(metaLine)
       titleLine.border = JBUI.Borders.emptyBottom(4)
+      titleLine.iconTextGap = 8
       add(lines, BorderLayout.CENTER)
-      dotLabel.border = JBUI.Borders.empty(0, 12, 0, 2)
-      add(dotLabel, BorderLayout.EAST)
       border = JBUI.Borders.empty(10, 12, 10, 10)
     }
 
@@ -447,16 +465,15 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
       val info = value ?: return this
       titleLine.clear()
       metaLine.clear()
-      titleLine.icon = sessionIcon
-      titleLine.iconTextGap = 12
+      val open = isSessionOpen(info.id)
+      titleLine.icon = if (open) dotIcon else sessionIcon
       titleLine.append(info.title, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
       val time = SimpleDateFormat("yyyy-MM-dd HH:mm").format(Date(info.lastModified))
-      metaLine.border = JBUI.Borders.emptyLeft(28)
+      metaLine.border = JBUI.Borders.emptyLeft(0)
       metaLine.append("$time · ${formatSize(info.sizeBytes)} · ${info.id.take(8)} · ${info.messageCount}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
       val sel = selected || list.isSelectedIndex(index)
       background = if (sel) UIUtil.getListSelectionBackground(true) else list.background
       foreground = list.foreground
-      dotLabel.isVisible = isSessionOpen(info.id)
       return this
     }
   }
