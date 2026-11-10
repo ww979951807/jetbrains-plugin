@@ -163,14 +163,19 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
       }
     })
     // The platform renames terminal tabs from the process title (OSC) and has no "never" mode
-    // for it, so a tab header can grow unbounded (a long script name takes half the tab strip).
-    // Clamp every terminal tab title to 10 chars while the panel is alive — the platform only
-    // renames on title *changes*, so our trim sticks until the next title event.
+    // for it — ssh's remote shell and the cmd spawned by npm both steal the tab name. Guard
+    // every terminal tab while the panel is alive: tabs we created get their script name
+    // restored (the process only renames on title changes, so ours sticks until the next
+    // steal); hand-opened tabs just get clamped to 10 chars.
     val titleClamp = AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay({
       SwingUtilities.invokeLater {
         TerminalToolWindowManager.getInstance(project).toolWindow?.contentManager?.contents?.forEach { c ->
-          val name = c.displayName
-          if (name.length > 10) c.setDisplayName(abbreviate(name, 10))
+          val own = c.getUserData(TAB_NAME_KEY)
+          if (own != null) {
+            val desired = abbreviate(own, 10)
+            if (c.displayName != desired) c.setDisplayName(desired)
+          }
+          else if (c.displayName.length > 10) c.setDisplayName(abbreviate(c.displayName, 10))
         }
       }
     }, 2, 2, TimeUnit.SECONDS)
