@@ -1,8 +1,5 @@
 name: haifassh
 on:
-  push:
-    branches: [main]
-    paths: ['haifassh/**', '.github/workflows/haifassh.yml']
   workflow_dispatch:
 
 jobs:

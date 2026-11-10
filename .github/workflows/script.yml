@@ -1,8 +1,5 @@
 name: script
 on:
-  push:
-    branches: [main]
-    paths: ['script/**', '.github/workflows/script.yml']
   workflow_dispatch:
 
 jobs:

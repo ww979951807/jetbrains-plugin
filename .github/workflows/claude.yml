@@ -1,8 +1,5 @@
 name: claude
 on:
-  push:
-    branches: [main]
-    paths: ['claude/**', '.github/workflows/claude.yml']
   workflow_dispatch:
 
 jobs:
