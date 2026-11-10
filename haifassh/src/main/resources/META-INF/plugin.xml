@@ -157,7 +157,7 @@
 
         <toolWindow id="SSH Sessions"
                     anchor="left"
-                    icon="/icons/sftpFolder.svg"
+                    icon="/icons/sshSessions.svg"
                     factoryClass="com.haifasoft.haifassh.ui.SshSessionsToolWindowFactory"/>
 
         <toolWindow id="SSH Terminals"
@@ -169,7 +169,7 @@
         <toolWindow id="SFTP Browser"
                     anchor="right"
                     canCloseContents="false"
-                    icon="/icons/sshSessions.svg"
+                    icon="/icons/sftpFolder.svg"
                     factoryClass="com.haifasoft.haifassh.fs.ui.SftpBrowserToolWindowFactory"/>
 
         <notificationGroup id="HaifaSSH" displayType="BALLOON"/>
