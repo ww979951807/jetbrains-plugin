@@ -386,8 +386,7 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
           "Delete Session", Messages.getQuestionIcon())
         if (answer != Messages.YES) return@actionPerformed
         runCatching { sessionFile(info.id).delete() }
-        val content = openClaudeContent(info.id)
-        if (content != null) {
+        findTabContent(info.id)?.let { content ->
           runCatching { content.manager?.removeContent(content, true) }
         }
         refresh()
