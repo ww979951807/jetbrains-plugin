@@ -30,6 +30,7 @@ import com.intellij.ui.content.ContentManagerEvent
 import com.intellij.ui.content.ContentManagerListener
 import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.UIUtil
 import org.jetbrains.plugins.terminal.ShellTerminalWidget
 import org.jetbrains.plugins.terminal.TerminalEngine
 import org.jetbrains.plugins.terminal.TerminalOptionsProvider
@@ -469,7 +470,7 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
   private fun abbreviate(text: String, bold: Boolean, reserve: Int): String {
     val font = if (bold) list.font.deriveFont(java.awt.Font.BOLD) else list.font
     val fm = list.getFontMetrics(font)
-    val available = list.width - JBUI.scale(reserve)
+    val available = (list.width - JBUI.scale(reserve)) / 2
     if (available <= 0 || fm.stringWidth(text) <= available) return text
     var s = text
     while (s.isNotEmpty() && fm.stringWidth("$s…") > available) s = s.dropLast(1)
@@ -477,10 +478,8 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
   }
 
   // Native two-line row per the approved prototype: title line = green open-dot (when the
-  // session has a terminal tab) + bold title; meta line in gray. WideSelectionListUI (set on
-  // the list in init) paints the selection/hover fill edge-to-edge across the FULL row, UNDER
-  // the renderer — so the renderer must stay non-opaque or it covers that fill, leaving only
-  // the focus ring visible.
+  // session has a terminal tab) + bold title; meta line in gray. The selection band is painted
+  // by the renderer itself (see getListCellRendererComponent) — full row, always blue.
   private inner class SessionRenderer : JPanel(BorderLayout()), ListCellRenderer<ClaudeSessionInfo> {
     private val titleLine = SimpleColoredComponent()
     private val metaLine = SimpleColoredComponent()
@@ -511,6 +510,11 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
       metaLine.append(abbreviate(meta, bold = false, reserve = 12 + 10 + 14), SimpleTextAttributes.GRAYED_ATTRIBUTES)
       metaLine.toolTipText = meta
       foreground = list.foreground
+      // The selection band is painted by the renderer itself, edge to edge, so it looks right
+      // no matter which list UI ends up active. Always the focused blue: clicking a row whose
+      // tab is open moves focus to the terminal, and the band must stay blue regardless.
+      isOpaque = selected
+      background = if (selected) UIUtil.getListSelectionBackground(true) else list.background
       return this
     }
   }
