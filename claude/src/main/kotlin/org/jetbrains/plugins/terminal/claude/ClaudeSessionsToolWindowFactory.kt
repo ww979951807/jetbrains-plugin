@@ -126,6 +126,19 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
         if (toolWindow.id == TERMINAL_TOOL_WINDOW_ID) attachTerminalListener()
       }
     })
+    // The platform renames terminal tabs from the process title (OSC) and has no "never" mode
+    // for it, so a tab header can grow unbounded (claude CLI sets long session titles).
+    // Clamp every terminal tab title to 10 chars while the panel is alive — the platform only
+    // renames on title *changes*, so our trim sticks until the next title event.
+    val titleClamp = AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay({
+      SwingUtilities.invokeLater {
+        TerminalToolWindowManager.getInstance(project).toolWindow?.contentManager?.contents?.forEach { c ->
+          val name = c.displayName
+          if (name.length > 10) c.setDisplayName(abbreviate(name, 10))
+        }
+      }
+    }, 2, 2, TimeUnit.SECONDS)
+    Disposer.register(listenerDisposable) { titleClamp.cancel(false) }
     refresh()
   }
 
@@ -146,7 +159,7 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
     val group = DefaultActionGroup()
     group.add(object : AnAction("New Session", "Start a new Claude session", AllIcons.General.Add) {
       override fun actionPerformed(e: AnActionEvent) {
-        openClaude("claude:new", "claude")
+        openClaude("claude:new", "claude:new", "claude")
         watchForNewSessionFile()
       }
     })
@@ -293,7 +306,9 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
   private fun isSessionOpen(id: String): Boolean =
     findTabContent(id) != null
 
-  private fun openSession(info: ClaudeSessionInfo) = openClaude(tabNameOf(info.id), "claude --resume ${info.id}")
+  // displayTitle = the list's title, so the tab shows the session name immediately —
+  // otherwise it first flashes "claude:<id>" until the CLI's OSC title arrives and renames it.
+  private fun openSession(info: ClaudeSessionInfo) = openClaude(tabNameOf(info.id), info.title, "claude --resume ${info.id}")
 
   // Single click: switch to the session's terminal tab only when it is already open.
   private fun switchToOpenTab(info: ClaudeSessionInfo) {
@@ -302,7 +317,7 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
     tw.activate { tw.contentManager.setSelectedContent(content, true) }
   }
 
-  private fun openClaude(tabName: String, command: String) {
+  private fun openClaude(tabName: String, displayTitle: String, command: String) {
     val toolWindow = TerminalToolWindowManager.getInstance(project).toolWindow
     val existing = toolWindow?.contentManager?.contents?.firstOrNull { it.getUserData(TAB_NAME_KEY) == tabName || it.displayName == tabName }
     if (existing != null) {
@@ -311,7 +326,7 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
       }
       return
     }
-    startCommand(tabName, command)
+    startCommand(tabName, displayTitle, command)
   }
 
   private fun rerunSession(info: ClaudeSessionInfo) {
@@ -321,26 +336,26 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
     if (existing != null) {
       runCatching { existing.manager?.removeContent(existing, true) }
     }
-    startCommand(tabName, "claude --resume ${info.id}")
+    startCommand(tabName, info.title, "claude --resume ${info.id}")
   }
 
   // Follow the Terminal Engine setting: REWORKED goes through the frontend-module runner
   // (Reworked engine renderer), anything else uses the classic API. Falls back to classic
   // when the frontend service is unavailable.
-  private fun startCommand(tabName: String, command: String) {
+  private fun startCommand(tabName: String, displayTitle: String, command: String) {
     val workDir = project.basePath
     ApplicationManager.getApplication().invokeLater {
       val before = TerminalToolWindowManager.getInstance(project).toolWindow
         ?.contentManager?.contents?.toSet() ?: emptySet()
       var started = false
       if (TerminalOptionsProvider.instance.terminalEngine == TerminalEngine.REWORKED) {
-        started = runCatching { TabCommandRunner(project).createTabAndRunCommand(workDir, tabName, command) }
+        started = runCatching { TabCommandRunner(project).createTabAndRunCommand(workDir, tabName, abbreviate(displayTitle, 10), command) }
           .getOrDefault(false)
       }
       if (!started) {
         runCatching {
           val widget: ShellTerminalWidget = TerminalToolWindowManager.getInstance(project)
-            .createLocalShellWidget(workDir, tabName) ?: return@invokeLater
+            .createLocalShellWidget(workDir, abbreviate(displayTitle, 10)) ?: return@invokeLater
           widget.executeCommand(command)
         }
       }
@@ -369,12 +384,16 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
         val fresh = projectDir().listFiles { f -> f.isFile && f.name.endsWith(".jsonl") }
           ?.filter { it.lastModified() > clickTime }
           ?.maxByOrNull { it.lastModified() }
-        if (fresh != null && content != null) {
-          val tabName = "claude:${fresh.name.removeSuffix(".jsonl").take(8)}"
-          content.putUserData(TAB_NAME_KEY, tabName)
-          content.setDisplayName(tabName)
+        var title: String? = null
+        if (fresh != null) {
+          val id = fresh.name.removeSuffix(".jsonl")
+          content?.putUserData(TAB_NAME_KEY, "claude:${id.take(8)}")
+          // Show the real session title as soon as the CLI writes it into the jsonl (same
+          // parsing as the list); until then keep the placeholder and keep polling.
+          title = titleOverride(id) ?: extractTitle(fresh)
+          if (title != null && content != null) content.setDisplayName(abbreviate(title, 10))
         }
-        if (content == null || fresh != null || n >= 40) {
+        if (content == null || n >= 40 || (fresh != null && title != null)) {
           newSessionWatch?.cancel(false)
           newSessionWatch = null
         }
@@ -499,10 +518,10 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
       metaLine.clear()
       val open = isSessionOpen(info.id)
       titleLine.icon = if (open) dotIcon else sessionIcon
-      titleLine.append(abbreviate(info.title, 10), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
+      titleLine.append(abbreviate(info.title, 25), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
       val time = SimpleDateFormat("yyyy-MM-dd HH:mm").format(Date(info.lastModified))
       val meta = "$time · ${formatSize(info.sizeBytes)} · ${info.id.take(8)} · ${info.messageCount}"
-      metaLine.append(abbreviate(meta, 25), SimpleTextAttributes.GRAYED_ATTRIBUTES)
+      metaLine.append(meta, SimpleTextAttributes.GRAYED_ATTRIBUTES)
       // JList asks the renderer component itself (this panel) for the tooltip — the inner
       // lines are never queried, so the full title rides on the panel.
       toolTipText = info.title

@@ -55,6 +55,7 @@ import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.io.File
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 import javax.swing.ButtonGroup
 import javax.swing.DefaultListModel
 import javax.swing.JComponent
@@ -161,6 +162,19 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
         if (toolWindow.id == TERMINAL_TOOL_WINDOW_ID) attachTerminalListener()
       }
     })
+    // The platform renames terminal tabs from the process title (OSC) and has no "never" mode
+    // for it, so a tab header can grow unbounded (a long script name takes half the tab strip).
+    // Clamp every terminal tab title to 10 chars while the panel is alive — the platform only
+    // renames on title *changes*, so our trim sticks until the next title event.
+    val titleClamp = AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay({
+      SwingUtilities.invokeLater {
+        TerminalToolWindowManager.getInstance(project).toolWindow?.contentManager?.contents?.forEach { c ->
+          val name = c.displayName
+          if (name.length > 10) c.setDisplayName(abbreviate(name, 10))
+        }
+      }
+    }, 2, 2, TimeUnit.SECONDS)
+    Disposer.register(listenerDisposable) { titleClamp.cancel(false) }
     reloadList()
   }
 
@@ -232,13 +246,13 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
         ?.contentManager?.contents?.toSet() ?: emptySet()
       var started = false
       if (TerminalOptionsProvider.instance.terminalEngine == TerminalEngine.REWORKED) {
-        started = runCatching { TabCommandRunner(project).createTabAndRunCommand(workDir, tabName, command) }
+        started = runCatching { TabCommandRunner(project).createTabAndRunCommand(workDir, tabName, abbreviate(tabName, 10), command) }
           .getOrDefault(false)
       }
       if (!started) {
         runCatching {
           val widget = TerminalToolWindowManager.getInstance(project)
-            .createLocalShellWidget(workDir, tabName) ?: return@invokeLater
+            .createLocalShellWidget(workDir, abbreviate(tabName, 10)) ?: return@invokeLater
           widget.executeCommand(command)
         }
       }
@@ -371,8 +385,8 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
       titleLine.clear()
       metaLine.clear()
       titleLine.icon = if (isOpen(cfg)) dotIcon else iconFor(cfg)
-      titleLine.append(abbreviate(cfg.name, 10), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
-      metaLine.append(abbreviate(commandFor(cfg), 25), SimpleTextAttributes.GRAYED_ATTRIBUTES)
+      titleLine.append(abbreviate(cfg.name, 25), SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
+      metaLine.append(commandFor(cfg), SimpleTextAttributes.GRAYED_ATTRIBUTES)
       // JList asks the renderer component itself (this panel) for the tooltip — the inner
       // lines are never queried, so the full title rides on the panel.
       toolTipText = cfg.name

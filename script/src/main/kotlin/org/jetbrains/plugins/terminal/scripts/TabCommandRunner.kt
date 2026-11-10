@@ -16,11 +16,16 @@ val TAB_NAME_KEY: Key<String> = Key.create("rebased.script.tab.name")
  * and runs a command in it. Falls back to the classic API in the caller when this throws.
  */
 class TabCommandRunner(private val project: Project) {
-  fun createTabAndRunCommand(workingDirectory: String?, tabName: String, command: String): Boolean {
+  fun createTabAndRunCommand(
+    workingDirectory: String?,
+    tabName: String,
+    displayTitle: String,
+    command: String,
+  ): Boolean {
     return try {
       val tab = TerminalToolWindowTabsManager.getInstance(project).createTabBuilder()
         .workingDirectory(workingDirectory)
-        .tabName(tabName)
+        .tabName(displayTitle)
         .createTab()
       tab.content.putUserData(TAB_NAME_KEY, tabName)
       tab.view.createSendTextBuilder()
