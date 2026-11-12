@@ -523,12 +523,16 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
       // JList asks the renderer component itself (this panel) for the tooltip — the inner
       // lines are never queried, so the full title rides on the panel.
       toolTipText = info.title
-      foreground = list.foreground
+      // Colors resolve from the current theme at paint time (not from the list component,
+      // whose UI-installed values go stale when the theme switches): title text is the theme's
+      // list foreground (black on light / white on dark, same when selected), the band is the
+      // theme's selection background, unselected rows the theme's list background.
+      foreground = UIUtil.getListForeground(false)
       // The selection band is painted by the renderer itself, edge to edge, so it looks right
       // no matter which list UI ends up active. Always the focused blue: clicking a row whose
       // tab is open moves focus to the terminal, and the band must stay blue regardless.
       isOpaque = selected
-      background = if (selected) UIUtil.getListSelectionBackground(true) else list.background
+      background = if (selected) UIUtil.getListSelectionBackground(true) else UIUtil.getListBackground(false)
       return this
     }
   }
