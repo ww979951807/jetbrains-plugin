@@ -303,6 +303,18 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
     })
     group.add(object : AnAction("Edit", "Edit this script configuration", AllIcons.Actions.Edit) {
       override fun actionPerformed(e: AnActionEvent) {
+        // The open tab is keyed by the script name; editing (especially renaming) with the
+        // tab open leaves a stale tab still running the old command. Close it first, with
+        // the user's confirmation.
+        if (isOpen(cfg)) {
+          val answer = Messages.showYesNoDialog(project,
+            "脚本\"${cfg.name}\"正在终端打开，需要先关闭才能编辑。\n是否关闭并编辑？",
+            "Edit Script", Messages.getQuestionIcon())
+          if (answer != Messages.YES) return@actionPerformed
+          findTabContent(cfg)?.let { content ->
+            runCatching { content.manager?.removeContent(content, true) }
+          }
+        }
         val dialog = ScriptConfigDialog(project, cfg)
         if (dialog.showAndGet()) {
           val newCfg = dialog.getCfg()

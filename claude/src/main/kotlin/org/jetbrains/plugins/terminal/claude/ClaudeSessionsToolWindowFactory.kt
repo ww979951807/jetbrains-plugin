@@ -41,6 +41,9 @@ import java.awt.GridLayout
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.io.File
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.concurrent.ScheduledFuture
@@ -197,7 +200,7 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
       .filter { it.length() > 0 }
       .map { f ->
         val id = f.name.removeSuffix(".jsonl")
-        ClaudeSessionInfo(id, titleOverride(id) ?: extractTitle(f) ?: "(no title)", f.lastModified(), f.length(), countMessages(f))
+        ClaudeSessionInfo(id, extractTitle(f) ?: "(no title)", f.lastModified(), f.length(), countMessages(f))
       }
       .sortedByDescending { it.lastModified }
       .toList()
@@ -390,7 +393,7 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
           content?.putUserData(TAB_NAME_KEY, "claude:${id.take(8)}")
           // Show the real session title as soon as the CLI writes it into the jsonl (same
           // parsing as the list); until then keep the placeholder and keep polling.
-          title = titleOverride(id) ?: extractTitle(fresh)
+          title = extractTitle(fresh)
           if (title != null && content != null) content.setDisplayName(abbreviate(title, 10))
         }
         if (content == null || n >= 40 || (fresh != null && title != null)) {
@@ -409,17 +412,22 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
     })
     group.add(object : AnAction("Rename", "Set a custom title for this session", AllIcons.Actions.Edit) {
       override fun actionPerformed(e: AnActionEvent) {
+        // The CLI rewrites the jsonl while its tab is alive and would clobber the rename —
+        // close the tab first, with the user's confirmation.
+        if (isSessionOpen(info.id)) {
+          val answer = Messages.showYesNoDialog(project,
+            "会话\"${info.title}\"正在终端打开，需要先关闭才能改名。\n是否关闭并改名？",
+            "Rename Session", Messages.getQuestionIcon())
+          if (answer != Messages.YES) return@actionPerformed
+          findTabContent(info.id)?.let { content ->
+            runCatching { content.manager?.removeContent(content, true) }
+          }
+        }
         val input = Messages.showInputDialog(project, "Session title:", "Rename Session",
                                              Messages.getQuestionIcon(), info.title, null) ?: return@actionPerformed
         val trimmed = input.trim()
         if (trimmed.isEmpty()) return@actionPerformed
-        setTitleOverride(info.id, trimmed)
-        refresh()
-      }
-    })
-    group.add(object : AnAction("Reset Title", "Remove the custom title", AllIcons.Actions.Rollback) {
-      override fun actionPerformed(e: AnActionEvent) {
-        setTitleOverride(info.id, null)
+        renameSession(info.id, trimmed)
         refresh()
       }
     })
@@ -444,39 +452,48 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
     popup.show(RelativePoint(e))
   }
 
-  private fun titleOverride(id: String): String? {
-    val f = File(projectDir(), "claude-session-titles.txt")
-    if (!f.isFile) return null
+  // Writes the custom title into the session file itself — the jsonl is the single source of
+  // truth shared with the CLI (the old claude-session-titles.txt side-file is gone). The value
+  // in the last ai-title record is replaced; when the CLI hasn't titled the session yet a new
+  // ai-title record is appended (extractTitle takes the LAST one, so the rename wins). Only
+  // runs with the session's tab closed — a live CLI would clobber the edit on its next write.
+  private fun renameSession(id: String, title: String) {
+    val file = sessionFile(id)
+    if (!file.isFile) return
     runCatching {
-      f.useLines { lines ->
-        for (line in lines) {
-          val idx = line.indexOf('=')
-          if (idx > 0 && line.substring(0, idx) == id) {
-            val v = line.substring(idx + 1)
-            if (v.isNotEmpty()) return v
-          }
-        }
+      val lines = file.readLines()
+      val escaped = jsonEscape(title)
+      val last = lines.indexOfLast { it.contains("\"type\":\"ai-title\"") || it.contains("\"type\": \"ai-title\"") }
+      if (last >= 0) {
+        // The lambda form bypasses $-group substitution in the replacement string.
+        lines[last] = Regex("\"aiTitle\"\\s*:\\s*\"(?:[^\"\\\\]|\\\\.)*\"")
+          .replace(lines[last]) { "\"aiTitle\":\"$escaped\"" }
+      } else {
+        lines.add("{\"type\":\"ai-title\",\"aiTitle\":\"$escaped\"}")
+      }
+      val nl = if (file.readText().contains("\r\n")) "\r\n" else "\n"
+      val tmp = File(file.parentFile, "${file.name}.rename-tmp")
+      tmp.writeText(lines.joinToString(nl) + nl)
+      val target = file.toPath()
+      try {
+        Files.move(tmp.toPath(), target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+      } catch (_: AtomicMoveNotSupportedException) {
+        Files.move(tmp.toPath(), target, StandardCopyOption.REPLACE_EXISTING)
       }
     }
-    return null
   }
 
-  private fun setTitleOverride(id: String, title: String?) {
-    val f = File(projectDir(), "claude-session-titles.txt")
-    val existing = LinkedHashMap<String, String>()
-    runCatching {
-      if (f.isFile) f.useLines { lines ->
-        for (line in lines) {
-          val idx = line.indexOf('=')
-          if (idx > 0) existing[line.substring(0, idx)] = line.substring(idx + 1)
-        }
-      }
+  private fun jsonEscape(s: String): String {
+    val sb = StringBuilder(s.length)
+    for (c in s) when (c) {
+      '\\' -> sb.append("\\\\")
+      '"' -> sb.append("\\\"")
+      '\n' -> sb.append("\\n")
+      '\r' -> sb.append("\\r")
+      '\t' -> sb.append("\\t")
+      else -> if (c < ' ') sb.append("\\u%04x".format(c.code)) else sb.append(c)
     }
-    if (title == null) existing.remove(id) else existing[id] = title
-    runCatching {
-      f.parentFile.mkdirs()
-      f.writeText(existing.entries.joinToString("\n") { "${it.key}=${it.value}" })
-    }
+    return sb.toString()
   }
 
   private val sessionIcon = IconLoader.getIcon("/icons/rebased/claudeSessions.svg", ClaudeSessionsPanel::class.java)
