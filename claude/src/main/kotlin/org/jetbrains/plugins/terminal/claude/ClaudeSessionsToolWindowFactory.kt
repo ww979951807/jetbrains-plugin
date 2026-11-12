@@ -461,7 +461,7 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
     val file = sessionFile(id)
     if (!file.isFile) return
     runCatching {
-      val lines = file.readLines()
+      val lines = file.readLines().toMutableList()
       val escaped = jsonEscape(title)
       val last = lines.indexOfLast { it.contains("\"type\":\"ai-title\"") || it.contains("\"type\": \"ai-title\"") }
       if (last >= 0) {
