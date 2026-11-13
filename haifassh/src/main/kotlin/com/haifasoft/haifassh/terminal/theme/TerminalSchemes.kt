@@ -1,5 +1,6 @@
 package com.haifasoft.haifassh.terminal.theme
 
+import com.intellij.execution.ui.ConsoleViewContentType
 import com.intellij.openapi.editor.colors.EditorColors
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.ui.ColorUtil
@@ -65,7 +66,11 @@ object TerminalSchemes {
     /** Derives a scheme from the IDE's active editor color scheme (dark or light). */
     fun fromIde(): TerminalColorScheme {
         val scheme = EditorColorsManager.getInstance().globalScheme
-        val bg = scheme.defaultBackground
+        // Same source as the native Terminal (JBTerminalSchemeColorPalette): the
+        // console-background key of the editor scheme, falling back to the editor
+        // text background when the scheme doesn't define one.
+        val bg = scheme.getColor(ConsoleViewContentType.CONSOLE_BACKGROUND_KEY)
+            ?: scheme.defaultBackground
         val fg = scheme.defaultForeground
         val dark = ColorUtil.isDark(bg)
         val selBg = scheme.getColor(EditorColors.SELECTION_BACKGROUND_COLOR)
