@@ -45,7 +45,7 @@ class ClaudeTerminalCopyAction : AnAction() {
     if (e.getData(CommonDataKeys.EDITOR)?.selectionModel?.hasSelection() == true) return true
     // The frontend panel publishes its editor under this key (uiDataSnapshot); the
     // stock action reads it. Check it too so we never grey out on a data-key miss.
-    val terminalEditor = e.getData(TERMINAL_EDITOR_KEY)
+    val terminalEditor = TERMINAL_EDITOR_KEY?.let { e.getData(it) }
     if (terminalEditor?.selectionModel?.hasSelection() == true) return true
     return false
   }
@@ -72,7 +72,7 @@ class ClaudeTerminalCopyAction : AnAction() {
 
   private fun editorSelectionText(e: AnActionEvent): String? =
     e.getData(CommonDataKeys.EDITOR)?.selectionModel?.selectedText
-        ?: e.getData(TERMINAL_EDITOR_KEY)?.selectionModel?.selectedText
+        ?: TERMINAL_EDITOR_KEY?.let { e.getData(it) }?.selectionModel?.selectedText
 
   override fun actionPerformed(e: AnActionEvent) {
     val text = terminalSelectionText(e) ?: editorSelectionText(e) ?: return
