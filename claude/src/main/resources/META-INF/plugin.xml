@@ -14,7 +14,7 @@
          the selection in the frontend TerminalView, not the popup-time editor selection the
          stock action checks. Override it with a copy that reads the terminal selection model
          and falls back to the stock behaviour elsewhere. -->
-    <action id="Terminal.CopySelectedText"
+    <action id="Terminal.CopySelectedText" overrides="true"
             class="org.jetbrains.plugins.terminal.claude.ClaudeTerminalCopyAction"
             icon="AllIcons.Actions.Copy"/>
   </actions>

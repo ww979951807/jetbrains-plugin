@@ -1,12 +1,18 @@
 package com.haifasoft.haifassh.terminal
 
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.CustomShortcutSet
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.actionSystem.DefaultActionGroup
+import com.intellij.openapi.actionSystem.KeyboardShortcut
+import com.intellij.openapi.actionSystem.Separator
+import com.intellij.openapi.actionSystem.Shortcut
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.ui.components.JBScrollBar
+import com.jediterm.terminal.CursorShape
 import com.jediterm.terminal.TextStyle
 import com.jediterm.terminal.model.StyleState
 import com.jediterm.terminal.model.TerminalTextBuffer
@@ -60,7 +66,12 @@ class ThemedJediTermWidget(settingsProvider: SettingsProvider) : JediTermWidget(
         settingsProvider: SettingsProvider,
         styleState: StyleState,
         textBuffer: TerminalTextBuffer,
-    ): TerminalPanel = NativePopupTerminalPanel(settingsProvider, textBuffer, styleState)
+    ): TerminalPanel = NativePopupTerminalPanel(settingsProvider, textBuffer, styleState).apply {
+        // Native terminal default: a blinking vertical bar. A shell that explicitly
+        // requests a shape via DECSCUSR still wins — setDefaultShape only supplies
+        // the fallback (TerminalCursor: requireNonNullElse(myShape, myDefault)).
+        setDefaultCursorShape(CursorShape.BLINK_VERTICAL_BAR)
+    }
 
     /** Re-reads the active scheme into the default style and repaints (theme/scheme switch). */
     fun reapplyScheme() {
@@ -95,12 +106,12 @@ private class NativePopupTerminalPanel(
         val group = DefaultActionGroup()
         for (action in provider.actions) {
             if (action.isHidden) continue
-            if (action.isSeparated) group.addSeparator()
+            if (action.isSeparated) group.add(Separator.create())
             group.add(action.toAnAction())
         }
         val popup = JBPopupFactory.getInstance()
             .createActionGroupPopup(null, group, DataContext.EMPTY_CONTEXT,
-                JBPopupFactory.ActionSelectionAid.SPEEDSEARCH, false)
+                JBPopupFactory.ActionSelectionAid.SPEEDSEARCH, true)
 
         return object : JPopupMenu() {
             override fun show(invoker: java.awt.Component?, x: Int, y: Int) {
@@ -115,19 +126,38 @@ private class NativePopupTerminalPanel(
     }
 
     private fun TerminalAction.toAnAction(): AnAction {
+        val jediAction = this
         val name = getName()
-        return object : AnAction(name, null, null) {
+        return object : AnAction(name, null, menuIcon(name)) {
+            init {
+                val strokes = runCatching { jediAction.getPresentation().keyStrokes }.getOrNull().orEmpty()
+                if (strokes.isNotEmpty()) {
+                    // The native popup renderer reads AnAction.getShortcutSet() (via
+                    // PopupFactoryImpl.ActionItem), so a custom shortcut set shows the
+                    // proper accelerator column for these unregistered actions.
+                    val shortcuts: List<Shortcut> = strokes.map { KeyboardShortcut(it, null) }
+                    shortcutSet = CustomShortcutSet(*shortcuts.toTypedArray())
+                }
+            }
+
             override fun actionPerformed(e: AnActionEvent) {
-                // JediTerm actions take the triggering KeyEvent; null matches what its
-                // own Swing menu items pass when clicked.
-                actionPerformed(null)
+                // Explicit receiver: an unqualified call would resolve to this anonymous
+                // AnAction's own override and recurse forever. JediTerm actions take the
+                // triggering KeyEvent; null matches what its own Swing menu passes.
+                jediAction.actionPerformed(null)
             }
 
             override fun update(e: AnActionEvent) {
-                e.presentation.isEnabled = isEnabled(null)
+                e.presentation.isEnabled = jediAction.isEnabled(null)
             }
 
             override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
         }
+    }
+
+    private fun menuIcon(actionName: String) = when (actionName) {
+        "Copy" -> AllIcons.Actions.Copy
+        "Paste" -> AllIcons.Actions.MenuPaste
+        else -> null
     }
 }

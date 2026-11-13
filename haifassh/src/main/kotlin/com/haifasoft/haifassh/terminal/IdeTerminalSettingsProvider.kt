@@ -44,6 +44,11 @@ class IdeTerminalSettingsProvider : DefaultSettingsProvider() {
 
     override fun getTerminalFontSize(): Float = ideConsoleFont().size2D
 
+    // Line spacing: JediTerm's stock 1.0 packs rows together, and CJK lines end up
+    // visually touching. The native Terminal's default tier is 1.2 — match it so
+    // output breathes like the IDE terminal. Independent of the font path above.
+    override fun getLineSpacing(): Float = 1.2f
+
     private fun canRenderCjk(f: java.awt.Font?): Boolean =
         f != null && f.canDisplayUpTo(CJK_SAMPLE) == -1
 
