@@ -416,7 +416,7 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
         // close the tab first, with the user's confirmation.
         if (isSessionOpen(info.id)) {
           val answer = Messages.showYesNoDialog(project,
-            "会话\"${info.title}\"正在终端打开，需要先关闭才能改名。\n是否关闭并改名？",
+            "Session is open, close and rename?\n${info.title}",
             "Rename Session", Messages.getQuestionIcon())
           if (answer != Messages.YES) return@actionPerformed
           findTabContent(info.id)?.let { content ->
@@ -434,14 +434,16 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
     group.addSeparator()
     group.add(object : AnAction("Delete", "Delete this session", AllIcons.Actions.GC) {
       override fun actionPerformed(e: AnActionEvent) {
-        val answer = Messages.showYesNoDialog(project,
-          "Delete this Claude session?\n\n${info.title}\n${info.id.take(8)}",
+        val opened = isSessionOpen(info.id)
+        val message = if (opened) "Session is open, close and delete?\n${info.title}"
+                      else "Delete this Claude session?\n${info.title}"
+        val answer = Messages.showYesNoDialog(project, message,
           "Delete Session", Messages.getQuestionIcon())
         if (answer != Messages.YES) return@actionPerformed
-        runCatching { sessionFile(info.id).delete() }
         findTabContent(info.id)?.let { content ->
           runCatching { content.manager?.removeContent(content, true) }
         }
+        runCatching { sessionFile(info.id).delete() }
         refresh()
       }
     })

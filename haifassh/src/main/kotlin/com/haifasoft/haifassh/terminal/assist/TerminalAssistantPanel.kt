@@ -2,8 +2,14 @@ package com.haifasoft.haifassh.terminal.assist
 
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.DefaultActionGroup
+import com.intellij.openapi.actionSystem.impl.SimpleDataContext
+import com.intellij.openapi.project.DumbAwareToggleAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.ui.InplaceButton
+import com.intellij.ui.awt.RelativePoint
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBTabbedPane
@@ -12,10 +18,7 @@ import com.intellij.util.ui.UIUtil
 import com.haifasoft.haifassh.model.SshSession
 import com.haifasoft.haifassh.settings.HaifaSshSettings
 import java.awt.BorderLayout
-import javax.swing.ButtonGroup
 import javax.swing.JPanel
-import javax.swing.JPopupMenu
-import javax.swing.JRadioButtonMenuItem
 
 import com.haifasoft.haifassh.ssh.SshShellHandle
 
@@ -76,15 +79,19 @@ class TerminalAssistantPanel(
     private fun showPositionMenu(anchor: InplaceButton) {
         val settings = HaifaSshSettings.getInstance()
         val current = settings.assistantPanelPosition
-        val menu = JPopupMenu()
-        val group = ButtonGroup()
+        val group = DefaultActionGroup()
         POSITIONS.forEach { (value, label) ->
-            val item = JRadioButtonMenuItem(label, value == current)
-            item.addActionListener { settings.assistantPanelPosition = value }
-            group.add(item)
-            menu.add(item)
+            group.add(object : DumbAwareToggleAction(label) {
+                override fun isSelected(e: AnActionEvent) = value == current
+                override fun setSelected(e: AnActionEvent, state: Boolean) {
+                    settings.assistantPanelPosition = value
+                }
+            })
         }
-        menu.show(anchor, 0, anchor.height)
+        JBPopupFactory.getInstance()
+            .createActionGroupPopup(null, group, SimpleDataContext.builder().build(),
+                JBPopupFactory.ActionSelectionAid.SPEEDSEARCH, false)
+            .show(RelativePoint(anchor, java.awt.Point(0, anchor.height)))
     }
 
     private companion object {

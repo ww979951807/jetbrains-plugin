@@ -308,7 +308,7 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
         // the user's confirmation.
         if (isOpen(cfg)) {
           val answer = Messages.showYesNoDialog(project,
-            "脚本\"${cfg.name}\"正在终端打开，需要先关闭才能编辑。\n是否关闭并编辑？",
+            "Script is open, close and edit?\n${cfg.name}",
             "Edit Script", Messages.getQuestionIcon())
           if (answer != Messages.YES) return@actionPerformed
           findTabContent(cfg)?.let { content ->
@@ -328,8 +328,10 @@ internal class ScriptsPanel(private val project: Project) : SimpleToolWindowPane
     group.addSeparator()
     group.add(object : AnAction("Delete", "Delete this script configuration", AllIcons.Actions.GC) {
       override fun actionPerformed(e: AnActionEvent) {
-        val answer = Messages.showYesNoDialog(project,
-          "Delete script configuration \"${cfg.name}\"?",
+        val opened = isOpen(cfg)
+        val message = if (opened) "Script is open, close and delete?\n${cfg.name}"
+                      else "Delete this script configuration?\n${cfg.name}"
+        val answer = Messages.showYesNoDialog(project, message,
           "Delete Script", Messages.getQuestionIcon())
         if (answer != Messages.YES) return@actionPerformed
         findTabContent(cfg)?.let { content ->
