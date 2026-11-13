@@ -4,29 +4,27 @@ package org.jetbrains.plugins.terminal.claude
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.terminal.frontend.view.TerminalView
-import org.jetbrains.plugins.terminal.action.TerminalCopyTextAction
 import java.awt.datatransfer.StringSelection
 
 /**
- * Override of the platform [Terminal.CopySelectedText] action (TerminalCopyTextAction).
+ * Override of the platform Terminal.CopySelectedText action (TerminalCopyTextAction).
  *
  * In Claude session tabs the terminal keeps the selection in the frontend
  * [TerminalView#getTextSelectionModel], while the stock action's enabled check reads the
  * popup-time editor selection — which is empty there, so the Copy item stays grey.
  * This override copies from the terminal selection model when one exists and otherwise
- * delegates to the stock action unchanged, so regular terminal tabs keep their behaviour.
+ * copies from the regular editor selection, so other terminal tabs keep working.
  */
 class ClaudeTerminalCopyAction : AnAction() {
-
-  private val fallback = TerminalCopyTextAction()
 
   init {
     templatePresentation.text = "Copy"
   }
 
-  private fun selectionText(e: AnActionEvent): String? {
+  private fun terminalSelectionText(e: AnActionEvent): String? {
     val view = e.getData(TerminalView.DATA_KEY) ?: return null
     val selection = view.textSelectionModel.selection ?: return null
     return runCatching {
@@ -34,21 +32,19 @@ class ClaudeTerminalCopyAction : AnAction() {
     }.getOrNull()
   }
 
+  private fun editorSelectionText(e: AnActionEvent): String? =
+    e.getData(CommonDataKeys.EDITOR)?.selectionModel?.selectedText
+
   override fun actionPerformed(e: AnActionEvent) {
-    val text = selectionText(e)
-    if (!text.isNullOrEmpty()) {
+    val text = terminalSelectionText(e) ?: editorSelectionText(e) ?: return
+    if (text.isNotEmpty()) {
       CopyPasteManager.getInstance().setContents(StringSelection(text))
-    }
-    else {
-      fallback.actionPerformed(e)
     }
   }
 
   override fun update(e: AnActionEvent) {
-    fallback.update(e)
-    if (!selectionText(e).isNullOrEmpty()) {
-      e.presentation.isEnabled = true
-    }
+    e.presentation.isEnabled = !terminalSelectionText(e).isNullOrEmpty()
+        || (e.getData(CommonDataKeys.EDITOR)?.selectionModel?.hasSelection() == true)
   }
 
   override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
