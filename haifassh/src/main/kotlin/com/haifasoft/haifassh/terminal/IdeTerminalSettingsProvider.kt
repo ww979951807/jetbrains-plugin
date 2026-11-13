@@ -52,6 +52,14 @@ class IdeTerminalSettingsProvider : DefaultSettingsProvider() {
     private fun canRenderCjk(f: java.awt.Font?): Boolean =
         f != null && f.canDisplayUpTo(CJK_SAMPLE) == -1
 
+    // A missing font silently resolves to Java's composite "Dialog" font, whose
+    // canDisplayUpTo reports CJK support it can't deliver per-glyph — JediTerm draws
+    // cells one glyph at a time, so the result is boxes. Reject the Dialog fallback
+    // (real fonts resolve to their own family, localized or not — e.g. NSimSun's
+    // family is 新宋体 on zh-Windows; only the Dialog composite lies).
+    private fun isRealFont(f: java.awt.Font): Boolean =
+        !f.family.equals(java.awt.Font.DIALOG, ignoreCase = true)
+
     private fun cjkFallback(size: Int): java.awt.Font? {
         // NOTE: do NOT pre-filter by getAvailableFontFamilyNames() — on some Windows
         // systems the CJK families never appear in that list, yet Font(name) still
@@ -59,7 +67,7 @@ class IdeTerminalSettingsProvider : DefaultSettingsProvider() {
         // new Font("NSimSun") renders CJK fine).
         for (name in CJK_CANDIDATES) {
             val f = java.awt.Font(name, java.awt.Font.PLAIN, size)
-            if (canRenderCjk(f)) return f
+            if (isRealFont(f) && canRenderCjk(f)) return f
         }
         return null
     }
@@ -67,7 +75,13 @@ class IdeTerminalSettingsProvider : DefaultSettingsProvider() {
     companion object {
         private const val CJK_SAMPLE = "中文测试，。Ａ１·"
         private val CJK_CANDIDATES = arrayOf(
-            "NSimSun", "SimSun", "Sarasa Mono SC", "Sarasa Term SC", "SimHei",
+            // Preferred: a single font carrying both monospaced Latin and CJK glyphs
+            // (bypasses JediTerm's no-fallback single-font rendering). Installed?
+            // absent -> the isRealFont probe skips it and the list falls
+            // through to the system fonts below.
+            "Sarasa Mono SC", "Sarasa Term SC", "Sarasa Mono J", "Sarasa Mono C",
+            // System fallbacks (Windows / Linux / macOS).
+            "NSimSun", "SimSun", "SimHei",
             "Microsoft YaHei", "Noto Sans Mono CJK SC", "Noto Sans CJK SC",
             "MS Gothic", "PingFang SC", "WenQuanYi Zen Hei"
         )
