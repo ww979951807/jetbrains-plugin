@@ -38,7 +38,7 @@ class IdeTerminalSettingsProvider : DefaultSettingsProvider() {
 
     override fun getTerminalFont(): java.awt.Font {
         val ide = ideConsoleFont()
-        if (canRenderCjk(ide)) return ide
+        if (isRealFont(ide) && canRenderCjk(ide)) return ide
         return cjkFallback(ide.size) ?: ide
     }
 
