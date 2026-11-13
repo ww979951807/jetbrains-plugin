@@ -9,13 +9,4 @@
     <toolWindow id="Claude Sessions" anchor="left" order="after Version Control" icon="/icons/rebased/claudeSessions.svg"
                 showStripeButton="true" factoryClass="org.jetbrains.plugins.terminal.claude.ClaudeSessionsToolWindowFactory"/>
   </extensions>
-  <actions>
-    <!-- Terminal.CopySelectedText is grey in Claude session tabs: the Reworked engine keeps
-         the selection in the frontend TerminalView, not the popup-time editor selection the
-         stock action checks. Override it with a copy that reads the terminal selection model
-         and falls back to the stock behaviour elsewhere. -->
-    <action id="Terminal.CopySelectedText" overrides="true"
-            class="org.jetbrains.plugins.terminal.claude.ClaudeTerminalCopyAction"
-            icon="AllIcons.Actions.Copy"/>
-  </actions>
 </idea-plugin>
