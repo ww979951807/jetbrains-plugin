@@ -2,11 +2,11 @@
 package org.jetbrains.plugins.terminal.claude
 
 import com.intellij.openapi.actionSystem.ActionUpdateThread
-import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.ide.CopyPasteManager
+import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.terminal.frontend.view.TerminalView
 import org.jetbrains.plugins.terminal.view.TerminalOffset
 import org.jetbrains.plugins.terminal.view.TerminalOutputModel
@@ -20,8 +20,11 @@ import java.awt.datatransfer.StringSelection
  * stays grey even with output selected. This override enables on any selection the
  * frontend terminal reports and copies from the terminal output model — with editor
  * selections as fallbacks.
+ *
+ * Must be DumbAware: the stock action is too, and a non-DumbAware action is force-disabled
+ * in every popup while the IDE is indexing (i.e. for the first minutes after each restart).
  */
-class ClaudeTerminalCopyAction : AnAction() {
+class ClaudeTerminalCopyAction : DumbAwareAction() {
 
   init {
     templatePresentation.text = "Copy"
