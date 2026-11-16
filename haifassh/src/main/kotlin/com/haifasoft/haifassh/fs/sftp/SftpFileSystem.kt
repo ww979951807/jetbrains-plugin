@@ -99,9 +99,35 @@ class SftpFileSystem(
 
     override fun delete(remotePath: String, isDirectory: Boolean) {
         if (isDirectory) {
+            // SFTP has no rm -rf: rm() only takes files, rmdir() only takes EMPTY directories.
+            // Emulate a recursive delete with the protocol primitives — clear the contents
+            // first, then the directory itself (deepest-first, so every rmdir sees an empty dir).
+            deleteTree(remotePath)
             channel.rmdir(remotePath)
         } else {
             channel.rm(remotePath)
+        }
+    }
+
+    // Recursively removes everything inside a directory. Symlinks are removed with rm()
+    // (they delete the link, not the target); directories are descended into.
+    private fun deleteTree(dir: String) {
+        @Suppress("UNCHECKED_CAST")
+        val entries = channel.ls(dir) as? Vector<ChannelSftp.LsEntry> ?: return
+        for (entry in entries) {
+            val name = entry.filename
+            if (name == "." || name == "..") continue
+            val child = normalizePath(dir, name)
+            val attrs = entry.attrs
+            when {
+                // isLink first: a link to a directory must be rm'd, not descended into.
+                attrs.isLink -> channel.rm(child)
+                attrs.isDir -> {
+                    deleteTree(child)
+                    channel.rmdir(child)
+                }
+                else -> channel.rm(child)
+            }
         }
     }
 

@@ -105,13 +105,42 @@ class FtpFileSystem(
     }
 
     override fun delete(remotePath: String, isDirectory: Boolean) {
-        val success = if (isDirectory) {
-            client.removeDirectory(remotePath)
+        if (isDirectory) {
+            // FTP's removeDirectory only deletes EMPTY directories. Emulate rm -rf with the
+            // protocol primitives — clear the contents first (deepest-first), then the dir.
+            deleteTree(remotePath)
+            if (!client.removeDirectory(remotePath)) {
+                throw IOException("Failed to delete $remotePath: ${client.replyString}")
+            }
         } else {
-            client.deleteFile(remotePath)
+            if (!client.deleteFile(remotePath)) {
+                throw IOException("Failed to delete $remotePath: ${client.replyString}")
+            }
         }
-        if (!success) {
-            throw IOException("Failed to delete $remotePath: ${client.replyString}")
+    }
+
+    // Recursively removes everything inside a directory. Symlinked entries are deleted with
+    // deleteFile (removes the link, not the target); directories are descended into.
+    private fun deleteTree(dir: String) {
+        val files = client.listFiles(dir) ?: return
+        for (f in files) {
+            val name = f.name
+            if (name == "." || name == "..") continue
+            val child = normalizePath(dir, name)
+            when {
+                f.isSymbolicLink -> if (!client.deleteFile(child)) {
+                    throw IOException("Failed to delete $child: ${client.replyString}")
+                }
+                f.isDirectory -> {
+                    deleteTree(child)
+                    if (!client.removeDirectory(child)) {
+                        throw IOException("Failed to delete $child: ${client.replyString}")
+                    }
+                }
+                else -> if (!client.deleteFile(child)) {
+                    throw IOException("Failed to delete $child: ${client.replyString}")
+                }
+            }
         }
     }
 
