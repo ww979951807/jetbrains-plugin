@@ -403,7 +403,10 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
           // Show the real session title as soon as the CLI writes it into the jsonl (same
           // parsing as the list); until then keep the placeholder and keep polling.
           title = extractTitle(fresh)
-          if (title != null && content != null) content.setDisplayName(abbreviate(title, 10))
+          if (title != null && content != null) {
+            content.setDisplayName(abbreviate(title, 10))
+            content.putUserData(TAB_TITLE_KEY, abbreviate(title, 10))
+          }
         }
         if (content == null || n >= 40 || (fresh != null && title != null)) {
           newSessionWatch?.cancel(false)
