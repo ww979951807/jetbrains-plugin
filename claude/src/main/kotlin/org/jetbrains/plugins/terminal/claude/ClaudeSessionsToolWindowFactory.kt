@@ -130,17 +130,20 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
       }
     })
     // The platform renames terminal tabs from the process title (OSC) and has no "never" mode
-    // for it, so a tab header can grow unbounded (claude CLI sets long session titles).
-    // Clamp every terminal tab title to 10 chars while the panel is alive — the platform only
-    // renames on title *changes*, so our trim sticks until the next title event.
+    // for it, so a claude tab's header keeps changing while the CLI runs (flapping title).
+    // For tabs carrying our TAB_TITLE_KEY the guard always restores that stored session name
+    // — the tab shows the same text no matter what the process sets — checked every second.
     val titleClamp = AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay({
       SwingUtilities.invokeLater {
         TerminalToolWindowManager.getInstance(project).toolWindow?.contentManager?.contents?.forEach { c ->
-          val name = c.displayName
-          if (name.length > 10) c.setDisplayName(abbreviate(name, 10))
+          val own = c.getUserData(TAB_TITLE_KEY)
+          if (own != null) {
+            if (c.displayName != own) c.setDisplayName(own)
+          }
+          else if (c.displayName.length > 10) c.setDisplayName(abbreviate(c.displayName, 10))
         }
       }
-    }, 2, 2, TimeUnit.SECONDS)
+    }, 1, 1, TimeUnit.SECONDS)
     Disposer.register(listenerDisposable) { titleClamp.cancel(false) }
     refresh()
   }
@@ -362,10 +365,16 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
           widget.executeCommand(command)
         }
       }
-      // Classic path has no direct Content handle: mark whatever tabs appeared.
+      // Classic path has no direct Content handle: mark whatever tabs appeared. The Reworked
+      // path already stored TAB_TITLE_KEY/TAB_VIEW_KEY at creation; the fallback marker here
+      // covers only the classic engine (no TerminalView handle — liveness falls back to the
+      // widget lookup by content).
       TerminalToolWindowManager.getInstance(project).toolWindow?.contentManager?.contents
         ?.filter { it !in before }
-        ?.forEach { it.putUserData(TAB_NAME_KEY, tabName) }
+        ?.forEach {
+          it.putUserData(TAB_NAME_KEY, tabName)
+          if (it.getUserData(TAB_TITLE_KEY) == null) it.putUserData(TAB_TITLE_KEY, abbreviate(displayTitle, 10))
+        }
       list.repaint()
     }
   }
@@ -440,11 +449,7 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
         val answer = Messages.showYesNoDialog(project, message,
           "Delete Session", Messages.getQuestionIcon())
         if (answer != Messages.YES) return@actionPerformed
-        findTabContent(info.id)?.let { content ->
-          runCatching { content.manager?.removeContent(content, true) }
-        }
-        runCatching { sessionFile(info.id).delete() }
-        refresh()
+        deleteSessionAfterProcessExit(info.id)
       }
     })
     val dataContext = SimpleDataContext.builder().build()
@@ -452,6 +457,59 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
       null, group, dataContext,
       JBPopupFactory.ActionSelectionAid.SPEEDSEARCH, false)
     popup.show(RelativePoint(e))
+  }
+
+  // Deletes a session's jsonl only after the CLI process that could rewrite it is really
+  // gone. Closing the terminal tab does not kill the process instantly — on exit the CLI
+  // writes its final metadata back into the file, recreating a title/mode-only "shell"
+  // jsonl after our delete (the zombie-session bug). Flow: close the tab, poll the tab's
+  // session state (Reworked engine: TerminalViewSessionState) or command liveness (classic
+  // engine: ShellTerminalWidget.hasRunningCommands / ProcessTtyConnector) until the process
+  // is gone (max 3s), delete, then re-check a few times and delete again if the dying
+  // process rewrote the file. For a session with no tab of ours (e.g. opened in an external
+  // terminal) we cannot see that process — delete right away and rely on the re-checks.
+  private fun deleteSessionAfterProcessExit(id: String) {
+    // Close the tab first: this is what makes the CLI exit.
+    findTabContent(id)?.let { content ->
+      runCatching { content.manager?.removeContent(content, true) }
+    }
+    AppExecutorUtil.getAppExecutorService().execute {
+      // Wait for the process to actually die (up to ~3s).
+      var waited = 0
+      while (waited < 3000 && isTabProcessAlive(id)) {
+        Thread.sleep(100)
+        waited += 100
+      }
+      runCatching { sessionFile(id).delete() }
+      // The exit write-back can land after our first delete; sweep for up to 10s.
+      var checks = 0
+      while (checks < 20) {
+        Thread.sleep(500)
+        val f = sessionFile(id)
+        if (f.isFile) runCatching { f.delete() } else return@execute
+        checks++
+      }
+    }
+    refresh()
+  }
+
+  // True while the terminal tab that ran this session still has a live process. Uses the
+  // Reworked engine's TerminalViewSessionState (TERMINATED = process gone); for classic
+  // tabs falls back to ShellTerminalWidget.hasRunningCommands(). No tab => not ours => false.
+  private fun isTabProcessAlive(id: String): Boolean {
+    val content = findTabContent(id) ?: return false
+    // Reworked engine: the TerminalView handle is stashed on the content at creation time.
+    content.getUserData(TAB_VIEW_KEY)?.let { view ->
+      return runCatching {
+        view.sessionState.value != com.intellij.terminal.frontend.view.TerminalViewSessionState.Terminated
+      }.getOrDefault(true)
+    }
+    // Classic engine: widget liveness from the content.
+    return runCatching {
+      val widget = org.jetbrains.plugins.terminal.TerminalView.getWidgetByContent(content)
+        as? org.jetbrains.plugins.terminal.ShellTerminalWidget ?: return false
+      widget.hasRunningCommands()
+    }.getOrDefault(true)
   }
 
   // Writes the custom title into the session file itself — the jsonl is the single source of
