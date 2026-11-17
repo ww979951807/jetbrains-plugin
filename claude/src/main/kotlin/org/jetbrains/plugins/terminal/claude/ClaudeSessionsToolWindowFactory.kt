@@ -404,8 +404,20 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
           // parsing as the list); until then keep the placeholder and keep polling.
           title = extractTitle(fresh)
           if (title != null && content != null) {
-            content.setDisplayName(abbreviate(title, 10))
-            content.putUserData(TAB_TITLE_KEY, abbreviate(title, 10))
+            val short = abbreviate(title, 10)
+            content.setDisplayName(short)
+            content.putUserData(TAB_TITLE_KEY, short)
+            // Same as TabCommandRunner: pin the title in the platform's TerminalTitle model —
+            // a Content.displayName write alone is overwritten by the title flow on the next
+            // OSC update (userDefinedTitle wins over the application title in buildTitle).
+            content.getUserData(TAB_VIEW_KEY)?.let { view ->
+              runCatching {
+                view.title.change { state ->
+                  state.userDefinedTitle = short
+                  state.trackTerminalApplicationTitleChanges = false
+                }
+              }
+            }
           }
         }
         if (content == null || n >= 40 || (fresh != null && title != null)) {
