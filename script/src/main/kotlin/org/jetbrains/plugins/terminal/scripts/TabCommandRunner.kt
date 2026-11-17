@@ -28,6 +28,19 @@ class TabCommandRunner(private val project: Project) {
         .tabName(displayTitle)
         .createTab()
       tab.content.putUserData(TAB_NAME_KEY, tabName)
+      // Pin the tab title in the platform's own title model. Reworked-engine tab names are
+      // rendered from TerminalTitle (updateTabNameOnTitleChange → Content.displayName), and
+      // every OSC title update from the process (ssh's remote shell, npm, …) rewrites
+      // applicationTitle — with userDefinedTitle unset the tab name follows it and flaps.
+      // userDefinedTitle wins over applicationTitle in TerminalTitle.buildTitle, so setting it
+      // pins the name; trackTerminalApplicationTitleChanges=false additionally stops the
+      // classic bindApplicationTitle path from overwriting the title.
+      runCatching {
+        tab.view.title.change {
+          userDefinedTitle = displayTitle
+          trackTerminalApplicationTitleChanges = false
+        }
+      }
       tab.view.createSendTextBuilder()
         .shouldExecute()
         .send(command)
