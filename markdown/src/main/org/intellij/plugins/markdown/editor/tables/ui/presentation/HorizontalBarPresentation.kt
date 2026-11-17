@@ -1,0 +1,341 @@
+// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+package org.intellij.plugins.markdown.editor.tables.ui.presentation
+
+import com.intellij.codeInsight.hint.HintManager
+import com.intellij.codeInsight.hint.HintManagerImpl
+import com.intellij.codeInsight.hints.fireUpdateEvent
+import com.intellij.codeInsight.hints.presentation.BasePresentation
+import com.intellij.codeInsight.hints.presentation.InlayPresentation
+import com.intellij.codeInsight.hints.presentation.PresentationFactory
+import com.intellij.openapi.actionSystem.ActionGroup
+import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.ActionToolbar
+import com.intellij.openapi.actionSystem.DataSink
+import com.intellij.openapi.actionSystem.impl.ToolbarUtils
+import com.intellij.openapi.application.invokeLater
+import com.intellij.openapi.command.executeCommand
+import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.RangeMarker
+import com.intellij.openapi.editor.colors.EditorFontType
+import com.intellij.openapi.editor.markup.TextAttributes
+import com.intellij.psi.PsiElement
+import com.intellij.psi.util.siblings
+import com.intellij.psi.util.startOffset
+import com.intellij.ui.LightweightHint
+import com.intellij.ui.paint.useCopy
+import com.intellij.util.ui.GraphicsUtil
+import org.intellij.plugins.markdown.editor.tables.TableSelectionAxis
+import org.intellij.plugins.markdown.editor.tables.TableSelectionMode
+import org.intellij.plugins.markdown.editor.tables.actions.TableActionKeys
+import org.intellij.plugins.markdown.editor.tables.actions.TableActionPlaces
+import org.intellij.plugins.markdown.editor.tables.isMacControlClick
+import org.intellij.plugins.markdown.editor.tables.prepareTableSelectionForMousePress
+import org.intellij.plugins.markdown.editor.tables.selectColumn
+import org.intellij.plugins.markdown.editor.tables.toTableSelectionMode
+import org.intellij.plugins.markdown.editor.tables.ui.presentation.GraphicsUtils.clearOvalOverEditor
+import org.intellij.plugins.markdown.lang.MarkdownTokenTypes
+import org.intellij.plugins.markdown.lang.psi.impl.MarkdownTable
+import org.intellij.plugins.markdown.lang.psi.impl.MarkdownTableRow
+import org.intellij.plugins.markdown.lang.psi.impl.MarkdownTableSeparatorRow
+import org.intellij.plugins.markdown.lang.psi.util.hasType
+import org.jetbrains.annotations.ApiStatus
+import java.awt.Dimension
+import java.awt.FontMetrics
+import java.awt.Graphics2D
+import java.awt.Point
+import java.awt.Rectangle
+import java.awt.event.MouseEvent
+import java.lang.ref.WeakReference
+import javax.swing.SwingUtilities
+
+@ApiStatus.Internal
+class HorizontalBarPresentation(private val editor: Editor, private val table: MarkdownTable): BasePresentation() {
+  private val tableRange = table.textRange
+  private val header: RangeMarker?
+  private val headerLength: Int
+  private val separatorShifts: List<Int>
+
+  init {
+    val row = table.headerRow
+    header = row?.textRange?.let(editor.document::createRangeMarker)
+    headerLength = row?.textLength ?: 0
+    separatorShifts = row?.let { calculateSeparatorShifts(it) }.orEmpty()
+  }
+
+  private var lastSelectedIndex: Int? = null
+  private var rowWidth = 0
+  private var barsModel: List<Rectangle> = emptyList()
+
+  override val width: Int
+    get() = rowWidth
+
+  override val height: Int by lazy(LazyThreadSafetyMode.NONE) {
+    if (editor.softWrapModel.getSoftWrapsForRange(tableRange.startOffset, tableRange.endOffset).isEmpty()) barHeight else 0
+  }
+
+  override fun paint(graphics: Graphics2D, attributes: TextAttributes) {
+    if (editor.isDisposed) {
+      return
+    }
+    updateBarsModel()
+    if (barsModel.isEmpty()) {
+      return
+    }
+    graphics.useCopy { local ->
+      GraphicsUtil.setupAntialiasing(local)
+      GraphicsUtil.setupRoundedBorderAntialiasing(local)
+      paintBars(local)
+    }
+  }
+
+  override fun toString() = "HorizontalBarPresentation"
+
+  override fun mouseClicked(event: MouseEvent, translated: Point) {
+    if (event.isMacControlClick()) return
+    val leftClick = SwingUtilities.isLeftMouseButton(event)
+    val doubleClick = event.clickCount.mod(2) == 0
+    val multipleSelection = event.toTableSelectionMode() != TableSelectionMode.REPLACE
+    if (!leftClick) return
+    when {
+      multipleSelection -> handleMouseLeftClick(event, translated)
+      doubleClick -> handleMouseLeftDoubleClick(event, translated)
+      else -> handleMouseLeftClick(event, translated)
+    }
+  }
+
+  override fun mousePressed(event: MouseEvent, translated: Point) {
+    if (!SwingUtilities.isLeftMouseButton(event)) return
+    editor.prepareTableSelectionForMousePress(table, TableSelectionAxis.COLUMN, event.toTableSelectionMode())
+  }
+
+  override fun mouseMoved(event: MouseEvent, translated: Point) {
+    val index = determineColumnIndex(translated)
+    updateSelectedIndexIfNeeded(index)
+  }
+
+  override fun mouseExited() {
+    updateSelectedIndexIfNeeded(null)
+  }
+
+  private fun updateBarsModel() {
+    val marker = header?.takeIf { it.isValid && it.endOffset - it.startOffset == headerLength } ?: return
+    val startOffset = marker.startOffset
+    val endOffset = marker.endOffset
+    val separators = separatorShifts.map { startOffset + it }
+    val editorOffsetToXY = (listOf(startOffset, endOffset) + separators)
+      .distinct()
+      .associateWith { editor.offsetToXY(it) }
+    val previousWidth = rowWidth
+    rowWidth = calculateRowWidth(startOffset, endOffset, editorOffsetToXY)
+    barsModel = if (rowWidth > 0) buildBarsModel(separators, obtainFontMetrics(editor), editorOffsetToXY) else emptyList()
+    if (rowWidth != previousWidth) {
+      invokeLater {
+        if (!editor.isDisposed) {
+          fireUpdateEvent(Dimension(previousWidth, height))
+        }
+      }
+    }
+  }
+
+  private fun calculateRowWidth(startOffset: Int, endOffset: Int, editorOffsetToXY: Map<Int, Point>): Int {
+    if (editorOffsetToXY.getValue(startOffset).y != editorOffsetToXY.getValue(endOffset).y) {
+      return 0
+    }
+    return (renderedX(endOffset, editorOffsetToXY) - renderedX(startOffset, editorOffsetToXY)).coerceAtLeast(0)
+  }
+
+  private fun renderedX(offset: Int, editorOffsetToXY: Map<Int, Point>): Int {
+    return editorOffsetToXY.getValue(offset).x +
+           editor.inlayModel.getInlineElementsInRange(offset, offset).sumOf { it.widthInPixels }
+  }
+
+  private fun updateSelectedIndexIfNeeded(index: Int?) {
+    if (lastSelectedIndex != index) {
+      lastSelectedIndex = index
+      // Force full re-render by lying about previous dimensions
+      fireUpdateEvent(Dimension(0, 0))
+    }
+  }
+
+  private fun buildBarsModel(
+    separators: List<Int>,
+    fontMetrics: FontMetrics,
+    editorOffsetToXY: Map<Int, Point>,
+  ): List<Rectangle> {
+    val positions = calculatePositions(separators, fontMetrics, editorOffsetToXY)
+    val sectors = buildSectors(positions)
+    return sectors.map { (offset, width) -> Rectangle(offset - barHeight / 2, 0, width + barHeight, barHeight) }
+  }
+
+  private fun calculatePositions(
+    separators: List<Int>,
+    fontMetrics: FontMetrics,
+    editorOffsetToXY: Map<Int, Point>,
+  ): List<Int> {
+    require(barHeight % 2 == 0) { "barHeight value should be even" }
+    val separatorWidth = fontMetrics.charWidth('|')
+    val firstOffset = separators.firstOrNull() ?: return emptyList()
+    val result = ArrayList<Int>()
+    var position = editorOffsetToXY.getValue(firstOffset).x - editor.contentComponent.insets.left + separatorWidth / 2
+    var lastOffset = firstOffset
+    result.add(position)
+    for (offset in separators.drop(1)) {
+      position += renderedX(offset, editorOffsetToXY) - renderedX(lastOffset, editorOffsetToXY)
+      result.add(position)
+      lastOffset = offset
+    }
+    return result
+  }
+
+  private fun buildSectors(positions: List<Int>): List<Pair<Int, Int>> {
+    return positions.windowed(2).map { (left, right) -> left to (right - left) }.toList()
+  }
+
+  private fun determineColumnIndex(point: Point): Int? {
+    return barsModel.indexOfFirst { it.contains(point) }.takeUnless { it < 0 }
+  }
+
+  private fun calculateToolbarPosition(componentHeight: Int, columnIndex: Int): Point {
+    val position = editor.offsetToXY(table.startOffset)
+    // Position hint relative to the editor
+    val editorParent = editor.contentComponent.topLevelAncestor.locationOnScreen
+    val editorPosition = editor.contentComponent.locationOnScreen
+    position.translate(editorPosition.x - editorParent.x, editorPosition.y - editorParent.y)
+    // Translate hint right above the bar
+    position.translate(leftPadding, -editor.lineHeight)
+    position.translate(0, -componentHeight)
+    val rect = barsModel[columnIndex]
+    val bottomPadding = 2
+    position.translate(rect.x, -rect.y - barHeight * 2 - bottomPadding)
+    return position
+  }
+
+  private fun showToolbar(columnIndex: Int) {
+    val targetComponent = ToolbarUtils.createTargetComponent(editor) { sink ->
+      uiDataSnapshot(sink, table, columnIndex)
+    }
+    ToolbarUtils.createImmediatelyUpdatedToolbar(
+      group = columnActionGroup,
+      place = TableActionPlaces.TABLE_INLAY_TOOLBAR,
+      targetComponent,
+      horizontal = true,
+      onUpdated = { createAndShowHint(it, columnIndex) }
+    )
+  }
+
+  private fun createAndShowHint(toolbar: ActionToolbar, columnIndex: Int) {
+    val hint = LightweightHint(toolbar.component)
+    hint.setForceShowAsPopup(true)
+    val targetPoint = calculateToolbarPosition(hint.component.preferredSize.height, columnIndex)
+    val hintManager = HintManagerImpl.getInstanceImpl()
+    hintManager.hideAllHints()
+    val flags = HintManager.HIDE_BY_ANY_KEY or HintManager.HIDE_BY_SCROLLING or HintManager.HIDE_BY_CARET_MOVE or HintManager.HIDE_BY_TEXT_CHANGE
+    hintManager.showEditorHint(hint, editor, targetPoint, flags, 0, false)
+  }
+
+  private fun handleMouseLeftDoubleClick(event: MouseEvent, translated: Point) {
+    val columnIndex = determineColumnIndex(translated) ?: return
+    invokeLater {
+      executeCommand {
+        table.selectColumn(
+          editor,
+          columnIndex,
+          withHeader = true,
+          withSeparator = true,
+          withBorders = true,
+          selectionMode = event.toTableSelectionMode()
+        )
+      }
+    }
+    event.consume()
+  }
+
+  private fun handleMouseLeftClick(event: MouseEvent, translated: Point) {
+    val columnIndex = determineColumnIndex(translated) ?: return
+    when (event.toTableSelectionMode()) {
+      TableSelectionMode.REPLACE -> showToolbar(columnIndex)
+      else -> handleMouseLeftDoubleClick(event, translated)
+    }
+  }
+
+  private fun actuallyPaintBars(graphics: Graphics2D, rect: Rectangle, hover: Boolean, accent: Boolean) {
+    val paintCount = when {
+      accent -> 2
+      else -> 1
+    }
+    repeat(paintCount) {
+      graphics.color = when {
+        hover -> TableInlayProperties.barHoverColor
+        else -> TableInlayProperties.barColor
+      }
+      graphics.fillRoundRect(rect.x, 0, rect.width, barHeight, barHeight, barHeight)
+      graphics.clearOvalOverEditor(rect.x, 0, barHeight, barHeight)
+      graphics.clearOvalOverEditor(rect.x + rect.width - barHeight, 0, barHeight, barHeight)
+    }
+  }
+
+  private fun paintBars(graphics: Graphics2D) {
+    val currentBarsModel = barsModel
+    // First pass: paint each bar without circles
+    for ((index, rect) in currentBarsModel.withIndex()) {
+      val mouseIsOver = lastSelectedIndex == index
+      actuallyPaintBars(graphics, rect, hover = mouseIsOver, accent = false)
+    }
+    // Second pass: paint each circle to fill up gaps
+    repeat(2) {
+      paintCircles(currentBarsModel) { x, _, _ ->
+        graphics.color = TableInlayProperties.barColor
+        graphics.fillOval(x, 0, barHeight, barHeight)
+      }
+    }
+  }
+
+  private fun paintCircles(rects: List<Rectangle>, width: Int = barHeight, block: (Int, Rectangle, Int) -> Unit) {
+    if (rects.isNotEmpty()) {
+      for ((index, rect) in rects.withIndex()) {
+        block(rect.x, rect, index)
+      }
+      rects.last().let { block(it.x + it.width - width, it, -1) }
+    }
+  }
+
+  companion object {
+    private val columnActionGroup
+      get() = ActionManager.getInstance().getAction("Markdown.TableColumnActions") as ActionGroup
+
+    // Should be even
+    const val barHeight = TableInlayProperties.barSize
+    const val leftPadding = VerticalBarPresentation.barWidth + TableInlayProperties.leftRightPadding * 2
+
+    private fun wrapPresentation(factory: PresentationFactory, editor: Editor, presentation: InlayPresentation): InlayPresentation {
+      return factory.inset(
+        PresentationWithCustomCursor(editor, presentation),
+        left = leftPadding,
+        top = TableInlayProperties.topDownPadding,
+        down = TableInlayProperties.topDownPadding
+      )
+    }
+
+    fun create(factory: PresentationFactory, editor: Editor, table: MarkdownTable): InlayPresentation {
+      return wrapPresentation(factory, editor, HorizontalBarPresentation(editor, table))
+    }
+
+    private fun obtainFontMetrics(editor: Editor): FontMetrics {
+      val font = editor.colorsScheme.getFont(EditorFontType.PLAIN)
+      return editor.contentComponent.getFontMetrics(font)
+    }
+
+    private fun calculateSeparatorShifts(row: MarkdownTableRow): List<Int> {
+      return row.firstChild.siblings(forward = true, withSelf = true)
+        .filter { it.hasType(MarkdownTokenTypes.TABLE_SEPARATOR) && it !is MarkdownTableSeparatorRow }
+        .map { it.startOffset - row.startOffset }
+        .toList()
+    }
+
+    private fun uiDataSnapshot(sink: DataSink, table: MarkdownTable, columnIndex: Int) {
+      val tableReference = WeakReference<PsiElement>(table)
+      sink.lazy(TableActionKeys.COLUMN_INDEX) { columnIndex }
+      sink.lazy(TableActionKeys.ELEMENT) { tableReference }
+    }
+  }
+}

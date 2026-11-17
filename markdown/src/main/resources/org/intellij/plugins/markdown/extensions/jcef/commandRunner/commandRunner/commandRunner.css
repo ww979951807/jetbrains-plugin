@@ -1,0 +1,47 @@
+/* Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file. */
+
+
+.run-icon > img {
+  max-width: 1em;
+  vertical-align: text-top;
+  margin: 0 -0.3em 0 -2.3em;
+}
+
+.run-icon-line > img {
+  max-width: 1em;
+  vertical-align: text-top;
+  margin-right: 0.3em;
+}
+
+/* The padding makes the gutter columns, and the negative margins of the icons move them into it. */
+pre:has(.code-block) {
+  padding-left: 2.5em;
+}
+
+pre:has(.run-icon.code-block):has(.run-icon-line) {
+  padding-left: 4em;
+}
+
+.code-block > img {
+  margin: 0 0 0 -1.75em;
+}
+
+pre:has(.run-icon-line) .run-icon.code-block > img {
+  margin-left: -3.5em;
+}
+
+.code-block {
+  display: inline-block;
+  width: 0;
+}
+
+.hidden {
+  display: none;
+}
+
+.run-icon::before,
+.run-icon::after,
+.run-icon-line::before,
+.run-icon-line::after {
+  content: none;
+}
