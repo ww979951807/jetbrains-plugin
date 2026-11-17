@@ -47,9 +47,9 @@ class TabCommandRunner(private val project: Project) {
       // pins the name; trackTerminalApplicationTitleChanges=false additionally stops the
       // classic bindApplicationTitle path from overwriting the title.
       runCatching {
-        tab.view.title.change { state ->
-          state.userDefinedTitle = displayTitle
-          state.trackTerminalApplicationTitleChanges = false
+        tab.view.title.change {
+          userDefinedTitle = displayTitle
+          trackTerminalApplicationTitleChanges = false
         }
       }
       tab.view.createSendTextBuilder()
