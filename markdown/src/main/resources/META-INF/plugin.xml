@@ -622,31 +622,16 @@
       implementationClass="com.intellij.markdown.figmaAdvertiser.FigmaAdvertiserUsagesCollector"/>
   </extensions>
   <!-- ===== module section ===== -->
-  <extensions defaultExtensionNs="com.intellij">
-    <languageInjectionPerformer language="Markdown"
-                                implementationClass="org.intellij.plugins.markdown.frontmatter.header.FrontMatterHeaderLanguageInjectionPerformer"/>
-  </extensions>
-  <extensions defaultExtensionNs="JavaScript.JsonSchema">
-    <ProviderFactory implementation="org.intellij.plugins.markdown.frontmatter.header.FrontMatterHeaderJsonSchemaProviderFactory"/>
-  </extensions>
   <!-- ===== module section ===== -->
   <!-- region Generated dependencies - run `Generate Product Layouts` to regenerate -->
   
   <!-- endregion -->
 
-  <extensions defaultExtensionNs="com.intellij">
-    <languageInjectionContributor language="Markdown"
-                                  implementationClass="org.intellij.plugins.markdown.frontmatter.toml.FrontMatterHeaderTomlInjectionContributor"/>
-  </extensions>
   <!-- ===== module section ===== -->
   <!-- region Generated dependencies - run `Generate Product Layouts` to regenerate -->
   
   <!-- endregion -->
 
-  <extensions defaultExtensionNs="com.intellij">
-    <languageInjectionContributor language="Markdown"
-                                  implementationClass="org.intellij.plugins.markdown.frontmatter.yaml.FrontMatterHeaderYamlInjectionContributor"/>
-  </extensions>
   <!-- ===== module section ===== -->
   <!-- region Generated dependencies - run `Generate Product Layouts` to regenerate -->
   
@@ -690,12 +675,6 @@
   <!-- region Generated dependencies - run `Generate Product Layouts` to regenerate -->
   
   <!-- endregion -->
-  <extensions defaultExtensionNs="com.intellij">
-    <psi.referenceContributor language="Markdown" implementation="com.intellij.markdown.java.JvmBacktickReferenceContributor"/>
-  </extensions>
-  <extensions defaultExtensionNs="org.intellij.markdown">
-    <codeSpanRunnableSearcher implementation="com.intellij.markdown.java.JvmCodeSpanConfigurationContextSearcher"/>
-  </extensions>
   <!-- ===== module section ===== -->
   <extensions defaultExtensionNs="com.intellij">
     <completion.contributor language="Markdown"

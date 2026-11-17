@@ -15,7 +15,6 @@ import com.intellij.psi.util.CachedValuesManager
 import com.intellij.psi.util.childrenOfType
 import com.intellij.psi.xml.XmlAttributeValue
 import com.intellij.util.PlatformIcons
-import com.intellij.markdown.backend.index.HeaderAnchorIndex
 import org.intellij.plugins.markdown.MarkdownIcons
 import org.intellij.plugins.markdown.lang.MarkdownTokenTypes
 import org.intellij.plugins.markdown.lang.psi.impl.MarkdownHeader
@@ -33,7 +32,7 @@ class HeaderAnchorLinkDestinationReference(
   private val file: PsiFile
 ): MarkdownPsiSymbolReferenceBase(element, anchorRangeInElement), PsiCompletableReference {
   override fun resolveReference(): Collection<Symbol> {
-    val headers = HeaderAnchorIndex.collectHeaders(file, anchorText)
+    val headers = com.intellij.plugins.markdown.lang.psi.impl.MarkdownHeader.findByAnchor(file, anchorText)
     val headerSymbols = headers.mapNotNull { HeaderSymbol.createPointer(it)?.dereference() }
     val injectedSymbols = collectInjectedHtmlAnchors()
     val inlineSymbols = collectInlineHtmlAnchors()

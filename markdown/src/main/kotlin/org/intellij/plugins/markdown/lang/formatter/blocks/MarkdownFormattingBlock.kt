@@ -13,13 +13,10 @@ import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.codeStyle.CodeStyleSettings
 import com.intellij.psi.formatter.common.AbstractBlock
-import com.intellij.psi.formatter.common.InjectedLanguageBlockBuilder
-import com.intellij.psi.formatter.common.MultiFragmentInjectedLanguageBlockBuilder
 import com.intellij.psi.formatter.common.SettingsAwareBlock
 import com.intellij.psi.tree.TokenSet
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.util.text.CharArrayUtil
-import org.intellij.plugins.markdown.injection.MarkdownCodeFenceUtils
 import org.intellij.plugins.markdown.lang.MarkdownElementTypes
 import org.intellij.plugins.markdown.lang.MarkdownLanguage
 import org.intellij.plugins.markdown.lang.MarkdownTokenTypeSets
@@ -141,15 +138,6 @@ internal open class MarkdownFormattingBlock(
     return MarkdownEditingAligner.calculateChildAttributes(subBlocks.getOrNull(newChildIndex - 1))
   }
 
-  override fun createInjectedLanguageBlockBuilder(settings: CodeStyleSettings): InjectedLanguageBlockBuilder {
-    return if (MarkdownCodeFenceUtils.isCodeFence(node)) {
-      MarkdownInjectedLanguageBlockBuilder(settings)
-    }
-    else {
-      super.createInjectedLanguageBlockBuilder(settings)
-    }
-  }
-
   override fun buildChildren(): List<Block> {
     if (!node.canBeFormatted()) {
       return emptyList()
@@ -183,37 +171,3 @@ internal open class MarkdownFormattingBlock(
   }
 }
 
-private class MarkdownInjectedLanguageBlockBuilder(settings: CodeStyleSettings) : MultiFragmentInjectedLanguageBlockBuilder(settings) {
-  override fun addInjectedBlocks(
-    result: MutableList<in Block>,
-    injectionHost: ASTNode,
-    wrap: Wrap?,
-    alignment: Alignment?,
-    indent: Indent?
-  ): Boolean {
-    val host = injectionHost.psi
-    val injectedFiles = InjectedLanguageManager.getInstance(host.project).getInjectedPsiFiles(host).orEmpty()
-    if (injectedFiles.any { PsiTreeUtil.hasErrorElements(it.first) }) return false
-    return super.addInjectedBlocks(result, injectionHost, wrap, alignment, indent)
-  }
-
-  override fun createBlockBeforeInjection(
-    node: ASTNode,
-    wrap: Wrap?,
-    alignment: Alignment?,
-    indent: Indent?,
-    range: TextRange
-  ): Block? {
-    return super.createBlockBeforeInjection(node, null, null, indent, range)
-  }
-
-  override fun createBlockAfterInjection(
-    node: ASTNode,
-    wrap: Wrap?,
-    alignment: Alignment?,
-    indent: Indent?,
-    range: TextRange
-  ): Block {
-    return super.createBlockAfterInjection(node, null, null, indent, range)
-  }
-}

@@ -39,7 +39,7 @@ private val HeadingProviders: Map<IElementType, GeneratingProvider> =
   PlainTextLeafTypes.associateWith { SourceSpanProvider } + mapOf(
     MarkdownTokenTypes.HTML_TAG to LiteralTextProvider,
     GFMElementTypes.INLINE_MATH to LiteralTextProvider,
-    GFMElementTypes.HIGHLIGHT to HighlightProvider,
+    MarkdownElementTypes.HIGHLIGHT to HighlightProvider,
     MarkdownElementTypes.IMAGE to SkippedProvider,
   )
 

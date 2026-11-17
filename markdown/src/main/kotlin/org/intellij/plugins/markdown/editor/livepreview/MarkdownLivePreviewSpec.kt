@@ -2,7 +2,7 @@
 package org.intellij.plugins.markdown.editor.livepreview
 
 import com.intellij.ide.rpc.DocumentPatchVersion
-import com.intellij.ide.rpc.patchVersion
+import com.intellij.ide.rpc.DocumentPatchVersionAccessor
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
@@ -90,7 +90,7 @@ data class MarkdownLivePreviewDocumentVersion(
     @JvmStatic
     fun capture(document: Document, project: Project): MarkdownLivePreviewDocumentVersion {
       return MarkdownLivePreviewDocumentVersion(
-        document.patchVersion(project),
+        DocumentPatchVersionAccessor.Companion.getDocumentVersion(document, project),
         document.modificationStamp,
       )
     }

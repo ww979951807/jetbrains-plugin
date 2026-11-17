@@ -56,7 +56,7 @@ public interface MarkdownTokenTypes extends TokenType {
   @NotNull IElementType ATX_HEADER = platformType(org.intellij.markdown.MarkdownTokenTypes.ATX_HEADER);
   @NotNull IElementType EMPH = platformType(org.intellij.markdown.MarkdownTokenTypes.EMPH);
   @NotNull IElementType TILDE = platformType(GFMTokenTypes.TILDE);
-  @NotNull IElementType EQUALS = platformType(GFMTokenTypes.EQUALS);
+  @NotNull IElementType EQUALS = new IElementType("MARKDOWN_EQUALS", null);
 
   @NotNull IElementType BACKTICK = platformType(org.intellij.markdown.MarkdownTokenTypes.BACKTICK);
   @NotNull IElementType ESCAPED_BACKTICKS = platformType(org.intellij.markdown.MarkdownTokenTypes.ESCAPED_BACKTICKS);
