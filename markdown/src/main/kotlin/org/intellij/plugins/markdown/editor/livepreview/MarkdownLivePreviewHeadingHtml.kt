@@ -8,7 +8,6 @@ import org.intellij.markdown.MarkdownTokenTypes
 import org.intellij.markdown.ast.ASTNode
 import org.intellij.markdown.ast.getTextInNode
 import org.intellij.markdown.flavours.gfm.GFMElementTypes
-import org.intellij.markdown.flavours.gfm.GFMTokenTypes
 import org.intellij.markdown.html.EqualDelimiterTrimmingInlineTagProvider
 import org.intellij.markdown.html.GeneratingProvider
 import org.intellij.markdown.html.HtmlGenerator
@@ -39,7 +38,7 @@ private val HeadingProviders: Map<IElementType, GeneratingProvider> =
   PlainTextLeafTypes.associateWith { SourceSpanProvider } + mapOf(
     MarkdownTokenTypes.HTML_TAG to LiteralTextProvider,
     GFMElementTypes.INLINE_MATH to LiteralTextProvider,
-    MarkdownElementTypes.HIGHLIGHT to HighlightProvider,
+    org.intellij.markdown.IElementType("MARKDOWN_HIGHLIGHT") to HighlightProvider,
     MarkdownElementTypes.IMAGE to SkippedProvider,
   )
 
@@ -88,7 +87,7 @@ private fun sourceSpan(node: ASTNode, html: String): String =
  * Renders a highlight as a `font` element with the `user-mark` class.
  * The Swing pane has no `mark` tag, and a `span` would lose its class to the source spans inside it.
  */
-private object HighlightProvider : EqualDelimiterTrimmingInlineTagProvider("font", GFMTokenTypes.EQUALS) {
+private object HighlightProvider : EqualDelimiterTrimmingInlineTagProvider("font", org.intellij.markdown.IElementType("MARKDOWN_EQUALS")) {
   override fun openTag(visitor: HtmlGenerator.HtmlGeneratingVisitor, text: String, node: ASTNode) {
     visitor.consumeTagOpen(node, tagName, "class=\"user-mark\"")
   }

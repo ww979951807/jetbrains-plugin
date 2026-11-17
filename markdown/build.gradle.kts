@@ -17,6 +17,30 @@ repositories {
 dependencies {
     intellijPlatform {
         intellijIdea("2026.3")
+        // Compose runtime/foundation (androidx.*) as shipped in the rebased IDE
+        bundledModule("intellij.libraries.compose.foundation.desktop")
+        bundledModule("intellij.libraries.compose.runtime.desktop")
+        bundledModule("intellij.libraries.compose.swing")
+        bundledModule("intellij.libraries.skiko")
+        // XML / HTML support
+        bundledModule("intellij.xml.psi")
+        bundledModule("intellij.xml.psi.impl")
+        bundledModule("intellij.xml.parser")
+        bundledModule("intellij.xml.analysis")
+        bundledModule("intellij.xml.analysis.impl")
+        // VCS ignore providers
+        bundledModule("intellij.platform.vcs.core")
+        bundledModule("intellij.platform.vcs.impl.shared")
+        bundledModule("intellij.platform.vcs")
+        // project extension functions (com.intellij.project.*)
+        bundledModule("intellij.platform.projectModel.impl")
+        // structure view / navbar
+        bundledModule("intellij.platform.structureView")
+        bundledModule("intellij.platform.structureView.impl")
+        // platform images plugin (ImageFileTypeManager, SvgFileType, EditorImagePasteProvider)
+        bundledModule("com.intellij.platform.images")
+        // parseHostAndPath / readGitRemoteUrls (org.jetbrains.ide.*)
+        bundledModule("intellij.platform.builtInServer.impl")
         bundledModule("intellij.platform.jewel.foundation")
         bundledModule("intellij.platform.jewel.ui")
         bundledModule("intellij.platform.jewel.ideLafBridge")
@@ -43,6 +67,10 @@ dependencies {
 
 kotlin {
     jvmToolchain(25)
+    compilerOptions {
+        // upstream sources use Kotlin 2.4 name-based destructuring (val [a, b] = pair)
+        freeCompilerArgs.add("-XXLanguage:+NameBasedDestructuring")
+    }
 }
 
 java {

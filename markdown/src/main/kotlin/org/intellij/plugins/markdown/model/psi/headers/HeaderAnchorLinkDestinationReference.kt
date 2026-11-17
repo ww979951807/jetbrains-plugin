@@ -32,7 +32,7 @@ class HeaderAnchorLinkDestinationReference(
   private val file: PsiFile
 ): MarkdownPsiSymbolReferenceBase(element, anchorRangeInElement), PsiCompletableReference {
   override fun resolveReference(): Collection<Symbol> {
-    val headers = com.intellij.plugins.markdown.lang.psi.impl.MarkdownHeader.findByAnchor(file, anchorText)
+    val headers = MarkdownHeader.findByAnchor(file, anchorText)
     val headerSymbols = headers.mapNotNull { HeaderSymbol.createPointer(it)?.dereference() }
     val injectedSymbols = collectInjectedHtmlAnchors()
     val inlineSymbols = collectInlineHtmlAnchors()
