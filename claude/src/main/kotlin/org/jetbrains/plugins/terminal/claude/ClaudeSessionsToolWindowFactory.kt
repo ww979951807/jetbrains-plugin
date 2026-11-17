@@ -412,9 +412,9 @@ internal class ClaudeSessionsPanel(private val project: Project) : SimpleToolWin
             // OSC update (userDefinedTitle wins over the application title in buildTitle).
             content.getUserData(TAB_VIEW_KEY)?.let { view ->
               runCatching {
-                view.title.change { state ->
-                  state.userDefinedTitle = short
-                  state.trackTerminalApplicationTitleChanges = false
+                view.title.change {
+                  userDefinedTitle = short
+                  trackTerminalApplicationTitleChanges = false
                 }
               }
             }
