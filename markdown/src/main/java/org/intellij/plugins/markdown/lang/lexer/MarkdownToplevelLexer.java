@@ -13,6 +13,7 @@ public class MarkdownToplevelLexer extends MarkdownTreeLexerBase {
   private int myBufferHash = 0;
   private int myBufferStart;
   private int myParsedEnd;
+  private org.intellij.markdown.ast.ASTNode myTree;
 
   public MarkdownToplevelLexer() {
     this(MarkdownParserManager.FLAVOUR);
@@ -32,6 +33,7 @@ public class MarkdownToplevelLexer extends MarkdownTreeLexerBase {
     myBufferHash = bufferHash;
     myBufferStart = startOffset;
     myParsedEnd = startOffset;
+    myTree = null;
     reset(CancellableText.of(buffer), endOffset);
     addNextTokens();
   }
@@ -39,9 +41,13 @@ public class MarkdownToplevelLexer extends MarkdownTreeLexerBase {
   @Override
   protected void addNextTokens() {
     if (myParsedEnd < getBufferEnd()) {
-      var block = parser.parseBlock(buffer, myParsedEnd);
-      addTokens(block.getChildren(), 0);
-      myParsedEnd = block.getEndOffset();
+      // rebased parser jar has no parseBlock(); buildMarkdownTreeFromString parses
+      // the whole document, so build once and serve tokens incrementally from it
+      if (myTree == null) {
+        myTree = parser.buildMarkdownTreeFromString(buffer);
+      }
+      addTokens(myTree.getChildren(), 0);
+      myParsedEnd = getBufferEnd();
     }
   }
 }

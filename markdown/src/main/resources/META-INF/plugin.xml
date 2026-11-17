@@ -585,7 +585,6 @@
   <!-- ===== module section ===== -->
   <extensions defaultExtensionNs="com.intellij">
     <multiHostInjector implementation="org.intellij.plugins.markdown.fenceInjection.CodeFenceInjector"/>
-    <multiHostInjector implementation="org.intellij.plugins.markdown.fenceInjection.CodeFenceTemporaryLangInjector"/>
   </extensions>
   <!-- ===== module section ===== -->
   <!-- region Generated dependencies - run `Generate Product Layouts` to regenerate -->

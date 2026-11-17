@@ -59,6 +59,8 @@ dependencies {
         bundledModule("intellij.textmate")
         bundledModule("intellij.textmate.core")
         bundledModule("intellij.textmate.common")
+        // spellchecker (SpellcheckingStrategy/Tokenizer) — rebased ships it as a product module
+        bundledModule("intellij.spellchecker")
         // The rebased platform bundles a JetBrains-internal variant of org.jetbrains:markdown
         // (BlockQuoteProvider has only a no-arg ctor). Compile against that exact jar instead of
         // a Maven version so the bytecode is binary-compatible by construction.
