@@ -4,6 +4,8 @@
   <vendor>ww979951807</vendor>
   <category>Languages</category>
   <depends>com.intellij.modules.lang</depends>
+  <!-- optional: the textmate fence-language provider is only wired when the textmate plugin is present -->
+  <depends optional="true" config-file="intellij.markdown.fenceInjector.textMate.xml">org.jetbrains.plugins.textmate</depends>
   <resource-bundle>messages.MarkdownBundle</resource-bundle>
   <description><![CDATA[
     <p>Markdown editor support rebuilt from JetBrains/intellij-community sources, adapted for the rebased platform: parser locked to the bundled markdown library, JCEF preview removed, Compose preview enabled by default.</p>
@@ -212,6 +214,8 @@
 
     <stripTrailingSpacesFilterFactory implementation="org.intellij.plugins.markdown.editor.MarkdownStripTrailingSpacesFilterFactory"/>
     <httpRequestHandler implementation="org.intellij.plugins.markdown.ui.preview.PreviewStaticServer"/>
+    <fileEditorProvider id="markdown-preview-editor"
+                        implementation="org.intellij.plugins.markdown.ui.preview.MarkdownSplitEditorProvider"/>
 
     <lang.foldingBuilder language="Markdown" implementationClass="org.intellij.plugins.markdown.folding.MarkdownFoldingBuilder"/>
 
@@ -765,16 +769,11 @@
   </extensions>
   <!-- ===== module section ===== -->
   <!-- region Generated dependencies - run `Generate Product Layouts` to regenerate -->
-  
-  <!-- endregion -->
 
-  <extensions defaultExtensionNs="org.intellij.markdown">
-    <fenceLanguageProvider id="textmate" implementation="com.intellij.markdown.fenceInjector.textMate.TextMateFallbackLanguageProvider"
-                           order="last, after default"/>
-  </extensions>
+  <!-- endregion -->
   <!-- ===== module section ===== -->
   <!-- region Generated dependencies - run `Generate Product Layouts` to regenerate -->
-  
+
   <!-- endregion -->
   <extensions defaultExtensionNs="com.intellij">
     <ignoredFileProvider implementation="com.intellij.markdown.vcs.MarkdownIgnoredFileProvider"/>
