@@ -325,8 +325,6 @@
     <advancedSetting id="markdown.hide.floating.toolbar" default="false" groupKey="markdown.settings.name"/>
     <advancedSetting id="markdown.squash.multiple.dashes.in.header.anchors" default="false" groupKey="markdown.settings.name"/>
 
-    <statistics.counterUsagesCollector implementationClass="org.intellij.plugins.markdown.MarkdownUsageCollector"/>
-    <statistics.applicationUsagesCollector implementation="org.intellij.plugins.markdown.settings.MarkdownSettingsCollector"/>
     <applicationSettings service="org.intellij.plugins.markdown.settings.MarkdownCodeFoldingSettings"/>
     <projectSettings service="org.intellij.plugins.markdown.settings.DocumentLinksSafeState"/>
     <projectSettings service="org.intellij.plugins.markdown.settings.pandoc.PandocSettings"/>
@@ -478,7 +476,6 @@
 
     <group id="Markdown.Toolbar.Floating">
       <!-- enables AI actions -->
-      <reference ref="Floating.CodeToolbar.Extensions"/>
 
       <action id="Markdown.Styling.SetHeaderLevel"
               class="org.intellij.plugins.markdown.ui.actions.styling.SetHeaderLevelAction"/>
@@ -621,8 +618,6 @@
     <editorFactoryDocumentListener
       implementation="com.intellij.markdown.figmaAdvertiser.FigmaLinkDocumentListener"/>
 
-    <statistics.counterUsagesCollector
-      implementationClass="com.intellij.markdown.figmaAdvertiser.FigmaAdvertiserUsagesCollector"/>
   </extensions>
   <!-- ===== module section ===== -->
   <!-- ===== module section ===== -->
