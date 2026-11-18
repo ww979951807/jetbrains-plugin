@@ -4,6 +4,9 @@
   <vendor>ww979951807</vendor>
   <category>Languages</category>
   <depends>com.intellij.modules.lang</depends>
+  <!-- EditorImagePasteProvider/ImageFileTypeManager/SvgFileType live in the platform-images
+       PLUGIN jar in rebased (not a moduleV2), so they are only visible via a plugin dependency. -->
+  <depends>com.intellij.platform.images</depends>
   <dependencies>
     <!-- Compose preview panel: without these module declarations the plugin classloader
          cannot see androidx.compose.runtime / Jewel / coil on the platform classpath. -->
