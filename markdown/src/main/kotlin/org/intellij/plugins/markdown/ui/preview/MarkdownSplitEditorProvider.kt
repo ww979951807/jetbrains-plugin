@@ -12,6 +12,6 @@ import org.jetbrains.annotations.ApiStatus
 class MarkdownSplitEditorProvider : TextEditorWithPreviewProvider(MarkdownPreviewFileEditorProvider()) {
   override fun createSplitEditor(firstEditor: TextEditor, secondEditor: FileEditor): FileEditor {
     require(secondEditor is MarkdownPreviewFileEditor) { "Secondary editor should be MarkdownPreviewFileEditor" }
-    return MarkdownEditorWithPreview(firstEditor, secondEditor, firstEditor.editor.project, MarkdownSettings.getInstance())
+    return MarkdownEditorWithPreview(firstEditor, secondEditor, requireNotNull(firstEditor.editor.project), MarkdownSettings.getInstance())
   }
 }
