@@ -10,7 +10,6 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.getOpenedProjects
 import com.intellij.psi.PsiFile
@@ -35,7 +34,7 @@ internal class MarkdownCodeFenceErrorHighlightingIntention : IntentionAction {
     }
 
     private fun restartCodeAnalyzer(project: Project) {
-      val editorManager = FileEditorManager.getInstance(project) ?: return
+      val editorManager = org.intellij.plugins.markdown.util.MarkdownFileEditorManagerCompat.getInstance(project) ?: return
       val codeAnalyzer = DaemonCodeAnalyzer.getInstance(project) ?: return
       val psiManager = PsiManager.getInstance(project)
       val coroutineScope = MarkdownPluginScope.scope(project)

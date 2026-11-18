@@ -2,10 +2,10 @@
 package org.intellij.plugins.markdown.fileActions.utils
 
 import com.intellij.openapi.fileEditor.FileEditor
-import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.TextEditorWithPreview
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import org.intellij.plugins.markdown.util.MarkdownFileEditorManagerCompat
 import org.intellij.plugins.markdown.ui.preview.MarkdownEditorWithPreview
 import org.intellij.plugins.markdown.ui.preview.MarkdownPreviewFileEditor
 import org.intellij.plugins.markdown.ui.preview.MarkdownPreviewFileEditor.Companion.PREVIEW_BROWSER
@@ -32,7 +32,7 @@ object MarkdownFileEditorUtils {
   }
 
   private fun <T: FileEditor> findEditor(project: Project, file: VirtualFile, predicate: (FileEditor) -> T?): T? {
-    val editorManager = FileEditorManager.getInstance(project)
+    val editorManager = MarkdownFileEditorManagerCompat.getInstance(project)
     val selectedEditor = editorManager.getSelectedEditor(file)?.let(predicate)
     if (selectedEditor != null) {
       return selectedEditor

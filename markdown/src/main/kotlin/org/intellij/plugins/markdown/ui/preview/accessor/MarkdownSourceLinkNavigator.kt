@@ -2,7 +2,6 @@
 package org.intellij.plugins.markdown.ui.preview.accessor
 
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectLocator
@@ -27,7 +26,7 @@ object MarkdownSourceLinkNavigator {
     ApplicationManager.getApplication().invokeLater {
       if (targetProject.isDisposed) return@invokeLater
       val descriptor = OpenFileDescriptor(targetProject, targetFile, coordinates.offset)
-      FileEditorManager.getInstance(targetProject).openEditor(descriptor, true)
+      org.intellij.plugins.markdown.util.MarkdownFileEditorManagerCompat.getInstance(targetProject).openEditor(descriptor, true)
     }
     return true
   }

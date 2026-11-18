@@ -351,7 +351,9 @@ class MarkdownPreviewFileEditor(
   }
 
   private fun cancelHtmlUpdate() {
-    updateHtmlInProgress.getAndSet(null)?.cancel()
+    // Rebased's kotlinx.coroutines.Job has no cancel$default synthetic; an explicit argument
+    // forces a direct call to cancel(CancellationException) instead of the $default bridge.
+    updateHtmlInProgress.getAndSet(null)?.cancel(null as java.util.concurrent.CancellationException?)
   }
 
   private inner class AttachPanelOnVisibilityChangeListener : ComponentAdapter() {
