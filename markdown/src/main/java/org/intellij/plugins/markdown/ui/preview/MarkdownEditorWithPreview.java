@@ -35,7 +35,9 @@ import java.util.Objects;
 public final class MarkdownEditorWithPreview extends TextEditorWithPreview implements MarkdownHeaderNavigationHandler {
   @VisibleForTesting
   public static final String LIVE_PREVIEW_PROPERTY = "markdown.editor.live.preview.layout.v2";
-  private static final String EDITOR_ONLY_ACTION_ID = "Markdown.Layout.EditorOnly";
+  // Platform registers TextEditorWithPreview.Layout.* actions; the upstream Markdown.Layout.EditorOnly
+  // action lives only in the frontend module which this build does not carry.
+  private static final String EDITOR_ONLY_ACTION_ID = "TextEditorWithPreview.Layout.EditorOnly";
 
   private final MarkdownLivePreviewLayoutAction livePreviewAction = new MarkdownLivePreviewLayoutAction();
   private final MarkdownSettings settings;
