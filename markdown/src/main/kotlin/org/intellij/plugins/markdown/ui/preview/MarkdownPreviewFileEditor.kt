@@ -346,7 +346,8 @@ class MarkdownPreviewFileEditor(
     }
     val set = updateHtmlInProgress.compareAndSet(null, job)
     if (!set) {
-      job.cancel()
+      // Rebased's Job has no cancel$default synthetic; pass an explicit argument for a direct call.
+      job.cancel(null as java.util.concurrent.CancellationException?)
     }
   }
 
