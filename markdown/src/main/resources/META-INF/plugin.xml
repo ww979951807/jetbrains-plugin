@@ -410,10 +410,10 @@
         <separator/>
         <action id="Markdown.Table.InsertTableColumn.InsertBefore"
                 class="org.intellij.plugins.markdown.editor.tables.actions.column.InsertTableColumnAction$InsertBefore"
-                icon="org.intellij.plugins.markdown.MarkdownIcons.EditorActions.AddColumnLeft"/>
+                icon="/icons/editor_actions/addColumnLeft.svg"/>
         <action id="Markdown.Table.InsertTableColumn.InsertAfter"
                 class="org.intellij.plugins.markdown.editor.tables.actions.column.InsertTableColumnAction$InsertAfter"
-                icon="org.intellij.plugins.markdown.MarkdownIcons.EditorActions.AddColumnRight"/>
+                icon="/icons/editor_actions/addColumnRight.svg"/>
         <separator/>
         <action id="Markdown.Table.SelectCurrentColumn.SelectContentCells"
                 class="org.intellij.plugins.markdown.editor.tables.actions.column.SelectCurrentColumnAction$SelectContentCells"
@@ -428,13 +428,13 @@
           <!--        class="org.intellij.plugins.markdown.editor.tables.actions.column.SetColumnAlignmentAction$None"/>-->
           <action id="Markdown.Table.SetColumnAlignment.Left"
                   class="org.intellij.plugins.markdown.editor.tables.actions.column.SetColumnAlignmentAction$Left"
-                  icon="org.intellij.plugins.markdown.MarkdownIcons.EditorActions.LeftAlign"/>
+                  icon="/icons/editor_actions/leftAlign.svg"/>
           <action id="Markdown.Table.SetColumnAlignment.Center"
                   class="org.intellij.plugins.markdown.editor.tables.actions.column.SetColumnAlignmentAction$Center"
-                  icon="org.intellij.plugins.markdown.MarkdownIcons.EditorActions.CenterAlign"/>
+                  icon="/icons/editor_actions/centerAlign.svg"/>
           <action id="Markdown.Table.SetColumnAlignment.Right"
                   class="org.intellij.plugins.markdown.editor.tables.actions.column.SetColumnAlignmentAction$Right"
-                  icon="org.intellij.plugins.markdown.MarkdownIcons.EditorActions.RightAlign"/>
+                  icon="/icons/editor_actions/rightAlign.svg"/>
         </group>
         <separator/>
         <action id="Markdown.Table.RemoveCurrentColumn"
@@ -451,10 +451,10 @@
         <separator/>
         <action id="Markdown.Table.InsertRow.InsertAbove"
                 class="org.intellij.plugins.markdown.editor.tables.actions.row.InsertRowAction$InsertAbove"
-                icon="org.intellij.plugins.markdown.MarkdownIcons.EditorActions.AddRowAbove"/>
+                icon="/icons/editor_actions/addRowAbove.svg"/>
         <action id="Markdown.Table.InsertRow.InsertBelow"
                 class="org.intellij.plugins.markdown.editor.tables.actions.row.InsertRowAction$InsertBelow"
-                icon="org.intellij.plugins.markdown.MarkdownIcons.EditorActions.AddRowBelow"/>
+                icon="/icons/editor_actions/addRowBelow.svg"/>
         <separator/>
         <action id="Markdown.Table.SelectRow"
                 class="org.intellij.plugins.markdown.editor.tables.actions.row.SelectRowAction"
@@ -491,7 +491,7 @@
     <!--Old id org.intellij.plugins.markdown.ui.actions.styling.MarkdownCreateLinkAction-->
     <action class="org.intellij.plugins.markdown.ui.actions.styling.MarkdownCreateLinkAction"
             id="Markdown.Styling.CreateLink"
-            icon="org.intellij.plugins.markdown.MarkdownIcons.EditorActions.Link">
+            icon="/icons/editor_actions/Link.svg">
       <keyboard-shortcut first-keystroke="control shift U" keymap="$default"/>
     </action>
 
@@ -503,29 +503,29 @@
       <separator/>
       <action class="org.intellij.plugins.markdown.ui.actions.styling.ToggleBoldAction"
               id="org.intellij.plugins.markdown.ui.actions.styling.ToggleBoldAction"
-              icon="org.intellij.plugins.markdown.MarkdownIcons.EditorActions.Bold">
+              icon="/icons/editor_actions/Bold.svg">
         <keyboard-shortcut first-keystroke="control B" keymap="$default"/>
       </action>
       <action class="org.intellij.plugins.markdown.ui.actions.styling.ToggleItalicAction"
               id="org.intellij.plugins.markdown.ui.actions.styling.ToggleItalicAction"
-              icon="org.intellij.plugins.markdown.MarkdownIcons.EditorActions.Italic">
+              icon="/icons/editor_actions/Italic.svg">
         <keyboard-shortcut first-keystroke="control I" keymap="$default"/>
       </action>
       <action class="org.intellij.plugins.markdown.ui.actions.styling.ToggleStrikethroughAction"
               id="org.intellij.plugins.markdown.ui.actions.styling.ToggleStrikethroughAction"
-              icon="org.intellij.plugins.markdown.MarkdownIcons.EditorActions.Strike_through">
+              icon="/icons/editor_actions/Strike_through.svg">
         <keyboard-shortcut first-keystroke="control shift S" keymap="$default"/>
       </action>
       <action class="org.intellij.plugins.markdown.ui.actions.styling.ToggleCodeSpanAction"
               id="org.intellij.plugins.markdown.ui.actions.styling.ToggleCodeSpanAction"
-              icon="org.intellij.plugins.markdown.MarkdownIcons.EditorActions.Code_span">
+              icon="/icons/editor_actions/Code_span.svg">
         <keyboard-shortcut first-keystroke="control shift C" keymap="$default"/>
       </action>
       <reference ref="Markdown.Styling.CreateLink"/>
       <separator/>
       <action class="org.intellij.plugins.markdown.ui.actions.styling.CreateOrChangeListPopupAction"
               id="Markdown.Styling.CreateOrChangeList"
-              icon="org.intellij.plugins.markdown.MarkdownIcons.EditorActions.BulletList"/>
+              icon="/icons/editor_actions/bulletList.svg"/>
     </group>
 
     <!--
@@ -543,13 +543,13 @@
       <!--</action>-->
       <action id="Markdown.GenerateTableOfContents"
               class="org.intellij.plugins.markdown.editor.toc.GenerateTableOfContentsAction"
-              icon="org.intellij.plugins.markdown.MarkdownIcons.EditorActions.BulletList"/>
+              icon="/icons/editor_actions/bulletList.svg"/>
     </group>
 
 
     <action class="org.intellij.plugins.markdown.ui.actions.styling.MarkdownIntroduceLinkReferenceAction"
             id="org.intellij.plugins.markdown.ui.actions.styling.MarkdownIntroduceLinkReferenceAction"
-            icon="org.intellij.plugins.markdown.MarkdownIcons.EditorActions.Link">
+            icon="/icons/editor_actions/Link.svg">
     </action>
 
     <group id="Markdown.EditorContextMenuGroup">
